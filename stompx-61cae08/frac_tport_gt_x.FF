@@ -1,0 +1,153 @@
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE CISC_FRC_GT
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Geothermal Mode (STOMPX-GT)
+!
+!     Compute initial solute fracture concentrations.
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by Mark White, PNNL, 18 August 2022.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE TRNS_FRC
+      USE TRNSPT
+      USE SOLTN
+      USE GRID
+      USE GEOM_FRC
+      USE FDVP_FRC
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      IF( IEQC.EQ.0 ) RETURN
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/CISC_FRC_GT'
+!
+!---  Loop over solutes  ---
+!
+      DO NSL = 1,NSOLU
+!
+!---    Loop over fracture triangles  ---
+!
+        DO NTX = 1,NFGT(ID+1)
+!
+!---      Skip inactive triangles  ---
+!
+          IF( IXP_FRC(NTX).EQ.0 ) CYCLE
+          NFX = NF_FRC(NTX)
+!
+!---      Stationary solute  ---
+!
+          IF( IEDL(NSL).EQ.4  ) THEN
+            XVS = 0.D+0
+          ELSEIF( IPCL(NSL).EQ.2 ) THEN
+            XVS = SL_FRC(2,NTX)*RHOS_TN(NTX)*
+     &        (1.D+0-PORD_FRC(2,NTX))*PCSL_TN(1,NTX,NSL)
+          ELSE
+            XVS = RHOS_TN(NTX)*PCSL_TN(1,NTX,NSL)*
+     &        (1.D+0-PORD_FRC(2,NTX))
+          ENDIF
+          XVL = SL_FRC(2,NTX)
+          XVG = SG_FRC(2,NTX)
+!
+!---      Stationary solute  ---
+!
+          IF( IEDL(NSL).EQ.4  ) THEN
+            PCGLX = 1.D+0
+!
+!---      Constant gas-aqueous partition coefficient  ---
+!
+          ELSEIF( IPCGL(NSL).EQ.0 ) THEN
+            PCGLX = PCGL(1,NSL)
+!
+!---      Temperature dependent gas-aqueous partition coefficient  ---
+!
+          ELSEIF( IPCGL(NSL).EQ.1 ) THEN
+            TK = T_FRC(2,NTX)+TABS
+            PCGLX = EXP( PCGL(1,NSL) + PCGL(2,NSL)/TK
+     &        + PCGL(3,NSL)*LOG(TK) + PCGL(4,NSL)*TK
+     &        + PCGL(5,NSL)*TK**2 )
+!
+!---      Water-vapor equilibrium gas-aqueous partition coefficient  ---
+!
+          ELSEIF( IPCGL(NSL).EQ.2 ) THEN
+            PCGLX = RHOG_FRC(2,NTX)*XGW_FRC(2,NTX)/
+     &        (RHOL_FRC(2,NTX)*XLW_FRC(2,NTX))
+          ENDIF
+          PCGLX = MAX( PCGLX,1.D-20 )
+          PCGLX = MIN( PCGLX,1.D+20 )
+!
+!---      Phase-volumetric concentration ratios  ---
+!
+          YVL = 1.D+0/(XVS + XVL + XVG*PCGLX)
+          YVG = 1.D+0/((XVS + XVL)/PCGLX + XVG)
+!
+!---      Phase mole fractions  ---
+!
+          YL_FRC(NTX,NSL) = XVL*YVL
+          YG_FRC(NTX,NSL) = XVG*YVG
+!
+!---      Phase-volumetric concentration ratios  ---
+!
+          IF( ICT_FRC(NFX,NSL).EQ.2 ) THEN
+            C_FRC(NTX,NSL) = C_FRC(NTX,NSL)*(XVS + XVL + XVG*PCGLX)
+          ELSEIF( ICT_FRC(NFX,NSL).EQ.-1 ) THEN
+            C_FRC(NTX,NSL) = C_FRC(NTX,NSL)*RHOS_TN(NTX)
+          ELSEIF( ICT_FRC(NFX,NSL).EQ.3 ) THEN
+            C_FRC(NTX,NSL) = C_FRC(NTX,NSL)*((XVS + XVL)/PCGLX + XVG)
+          ELSEIF( ICT_FRC(NFX,NSL).EQ.4 ) THEN
+            C_FRC(NTX,NSL) = C_FRC(NTX,NSL)/(LOG(2.D+0)/HLF(NSL))
+     &        /VOL_FRC(NTX)
+          ENDIF
+        ENDDO
+!        PRINT *,'YL_FRC(1,',NSL,') = ',YL_FRC(1,NSL),
+!     &    'YG_FRC(1,',NSL,') = ',YG_FRC(1,NSL),'ID = ',ID
+      ENDDO
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of CISC_FRC_GT group ---
+!
+      RETURN
+      END
+

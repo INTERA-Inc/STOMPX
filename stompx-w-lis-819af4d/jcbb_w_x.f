@@ -1,0 +1,1155 @@
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE JCBLB_W( RS,N,MEQ )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Load the Jacobian matrix.
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 13 June 2022
+!
+
+!----------------------LIS Modules-------------------------------------!
+!
+      USE LIS_STOMP
+!
+
+
+
+
+
+
+
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE JACOB
+      USE GRID
+      USE FDVP
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RS(LUK+1)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/JCBLB_W'
+
+!
+!---  Lis solver  ---
+!
+      NMD = (IXP(N)-1)*ISVC
+      IROW =  NMD + MEQ
+      MA = 0
+      DO M = 1,ISVC
+        MCOL = KLU(IROW-IEQ_OFFSET,M+MA)
+        DLU(MCOL) = DLU(MCOL) + (RS(M+1)-RS(1))/DNR(M,N)
+      ENDDO
+      BUFFER = -RS(1)
+      CALL lis_vector_set_value_f( 1,IROW,BUFFER,
+     &    F_RHS_VEC,IERR )
+      RSDL(MEQ,N) = RSDL(MEQ,N) - RS(1)
+
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of JCBL_W group
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE JCBLWB_W( N,NB )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Modify the Jacobian matrix for boundary conditions.
+!     (aqueous boundary, water equation, bottom surface)
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 13 June 2022
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE GRID
+      USE FLUX
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RS(LUK+1)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/JCBLWB_W'
+      DO M = 1,ISVC+1
+        MP = MPOSB(M)
+        RS(M) = -AFZ(1,N)*WLW(MP,1,N)
+      ENDDO
+!
+!---  Load Jacobian Matrix  ---
+!
+      CALL JCBLB_W( RS,N,IEQW )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of JCBLWB_W group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE JCBLWS_W( N,NB )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Modify the Jacobian matrix for boundary conditions.
+!     (aqueous boundary, water equation, south surface)
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 13 June 2022
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE GRID
+      USE FLUX
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RS(LUK+1)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/JCBLWS_W'
+      DO M = 1,ISVC+1
+        MP = MPOSB(M)
+        RS(M) = -AFY(1,N)*VLW(MP,1,N)
+      ENDDO
+!
+!---  Load Jacobian Matrix  ---
+!
+      CALL JCBLB_W( RS,N,IEQW )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of JCBLWS_W group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE JCBLWW_W( N,NB )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Modify the Jacobian matrix for boundary conditions.
+!     (aqueous boundary, water equation, west surface)
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 13 June 2022
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE GRID
+      USE FLUX
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RS(LUK+1)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/JCBLWW_W'
+      DO M = 1,ISVC+1
+        MP = MPOSB(M)
+        RS(M) = -AFX(1,N)*ULW(MP,1,N)
+      ENDDO
+!
+!---  Load Jacobian Matrix  ---
+!
+      CALL JCBLB_W( RS,N,IEQW )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of JCBLWW_W group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE JCBLWE_W( N,NB )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Modify the Jacobian matrix for boundary conditions.
+!     (aqueous boundary, water equation, east surface)
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 13 June 2022
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE GRID
+      USE FLUX
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RS(LUK+1)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/JCBLWE_W'
+      DO M = 1,ISVC+1
+        MN = MNEGB(M)
+        RS(M) = AFX(2,N)*ULW(MN,2,N)
+      ENDDO
+!
+!---  Load Jacobian Matrix  ---
+!
+      CALL JCBLB_W( RS,N,IEQW )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of JCBLWE_W group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE JCBLWN_W( N,NB )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Modify the Jacobian matrix for boundary conditions.
+!     (aqueous boundary, water equation, north surface)
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 13 June 2022
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE GRID
+      USE FLUX
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RS(LUK+1)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/JCBLWN_W'
+      DO M = 1,ISVC+1
+        MN = MNEGB(M)
+        RS(M) = AFY(2,N)*VLW(MN,2,N)
+      ENDDO
+!
+!---  Load Jacobian Matrix  ---
+!
+      CALL JCBLB_W( RS,N,IEQW )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of JCBLWN_W group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE JCBLWT_W( N,NB )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Modify the Jacobian matrix for boundary conditions.
+!     (aqueous boundary, water equation, top surface)
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 13 June 2022
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE GRID
+      USE FLUX
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RS(LUK+1)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/JCBLWT_W'
+      DO M = 1,ISVC+1
+        MN = MNEGB(M)
+        RS(M) = AFZ(2,N)*WLW(MN,2,N)
+      ENDDO
+!
+!---  Load Jacobian Matrix  ---
+!
+      CALL JCBLB_W( RS,N,IEQW )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of JCBLWT_W group  ---
+!
+      RETURN
+      END
+

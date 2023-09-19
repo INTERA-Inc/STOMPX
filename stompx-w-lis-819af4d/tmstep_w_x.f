@@ -1,0 +1,202 @@
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE TMSTEP
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Water Mode (STOMPX-W)
+!
+!     Compute the time step based on the previous time step,
+!     the acceleration factor, the maximum time step, the time until
+!     the next print, and the time until the next start of a
+!     boundary condition.
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, Battelle, PNNL, 18 June 2022
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE GLB_PAR
+      USE SOURC
+      USE SOLTN
+      USE OUTPU
+      USE GRID
+      USE CONST
+      USE BCV
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/TMSTEP'
+!
+!---  Loop over execution periods to determine the current execution
+!     period  ---
+!
+      NPX = 0
+      TMPSX = -1.D+20
+      TMTOL = 1.D-9
+      TMZ = TM
+      IF( MEPD.EQ.1 ) TMZ = MOD(TM,TMPE(NEPD))
+      DO N = 1,NEPD
+        IF( (TMZ-TMPS(N))/(ABS(TMZ)+EPSL).GT.-EPSL .AND.
+     &    (TMPE(N)-TMZ)/(ABS(TMZ)+EPSL).GT.-EPSL ) THEN
+          IF( TMPS(N).GT.TMPSX ) THEN
+            TMPSX = TMPS(N)
+            NPX = N
+          ENDIF
+        ENDIF
+      ENDDO
+      IF( NPX.NE.0 ) IEPD = NPX
+      DTAF = TMPA(IEPD)
+      DTCF = TMPC(IEPD)
+      DTMX = TMPX(IEPD)
+      DTMN = TMPN(IEPD)
+      RSDMX = RSDM(IEPD)
+      ISLC(81) = ITOFF(IEPD)
+!
+!---  Assign the initial time step  ---
+!
+      IF( ABS((TMZ-TMPS(IEPD))/(ABS(TMZ)+EPSL)).LE.EPSL ) THEN
+        IF( TMPD(IEPD).GT.EPSL ) THEN
+          DT = TMPD(IEPD)/DTAF
+          DTO = DT
+        ENDIF
+      ENDIF
+      DTNX = MAX( DTO,DT*DTAF )
+      DTQU = TMMX - TM
+!
+!---  Loop over print times
+!     compute time step to next print time  ---
+!
+      DTPR = BIG
+      DO N = 1,NPRTM
+        IF( PRTM(N).GT.TM ) DTPR = MIN( DTPR,PRTM(N)-TM )
+      ENDDO
+      TMPR = TM + DTPR
+!
+!---  Loop over local boundary conditions
+!     compute time step to next boundary condition transition  ---
+!
+      DTBCL = BIG
+      DO N = 1,NBC(ID+1)
+        TMZ = TM
+        MB = IBCIN(N)
+        IF( IBCC(N).EQ.1 ) TMZ = MOD(TM,BC(1,IBCM(N),MB))
+        DO M = 1,IBCM(N)
+          DTBCX = DTBCL
+          IF( BC(1,M,MB)-TMZ.GT.TMTOL ) 
+     &      DTBCL = MIN( DTBCL,BC(1,M,MB)-TMZ )
+          IF( (TM+DTBCL).EQ.TM ) DTBCL = DTBCX
+        ENDDO
+      ENDDO
+!
+!---  Find global time step to next boundary condition transition  ---
+!
+      NVAR = 1
+      CALL MPI_ALLREDUCE( DTBCL,DTBC,NVAR,MPI_REAL8,MPI_MIN,
+     &  MPI_COMM_WORLD,IERR )
+!
+!---  Loop over sources,
+!     compute time step to next source transition  ---
+!
+      DTSRL = BIG
+      DO NS = 1,NSR(ID+1)
+        MB = ISRIN(NS)
+        DO M = 1,ISRM(NS)
+          IF( SRC(1,M,MB).GT.TM ) DTSRL = MIN( DTSRL,SRC(1,M,MB)-TM )
+        ENDDO
+      ENDDO
+!
+!---  Find global time step to next source transition  ---
+!
+      NVAR = 1
+      CALL MPI_ALLREDUCE( DTSRL,DTSR,NVAR,MPI_REAL8,MPI_MIN,
+     &  MPI_COMM_WORLD,IERR )
+!
+!---  Loop over execution periods,
+!     compute time step to next execution period start  ---
+!
+      DTEP = BIG
+      TMZ = TM
+      IF( MEPD.EQ.1 ) TMZ = MOD(TM,TMPS(NEPD))
+      DO N = 1,NEPD
+        IF( TMPS(N).GT.TMZ ) DTEP = MIN( DTEP,TMPS(N)-TMZ )
+      ENDDO
+!!
+!!---  Loop over well times
+!!     compute time step to next well transition  ---
+!!
+      DTWL = BIG
+!      IF( LWELL.EQ.1 ) THEN
+!        DO NWL = 1,NWLS
+!          TMZ = TM
+!          IF( IWCC(NWL).EQ.1 ) TMZ = MOD(TM,WLVR(1,IWM(NWL),NWL))
+!          DO M = 1,IWM(NWL)
+!            DTWLX = DTWL
+!            IF( WLVR(1,M,NWL).GT.TMZ )
+!     &        DTWL = MIN( DTWL,WLVR(1,M,NWL)-TMZ )
+!            IF( (TM+DTWL).EQ.TM ) DTWL = DTWLX
+!          ENDDO
+!        ENDDO
+!      ENDIF
+!
+!---  Compute the next step based on the minimum of
+!     the incremented time step, 
+!     the time step to quit,
+!     the time step to print, 
+!     the time step to a boundary condition transition, 
+!     the time step to a source transition,
+!     the time step to an execution period start,
+!     the time step to a well time,
+!     or the maximum time step  ---
+!
+      DT = MIN( DTNX,DTQU,DTPR,DTBC,DTSR,DTEP,DTMX )
+      IF( LWELL.EQ.1 ) DT = MIN( DT,DTWL )
+      DTI = 1.D+0/(DT+SMALL)
+      IF( ABS(DT-DTNX)/(ABS(DT)+EPSL).LE.EPSL .OR.
+     &  ABS(DT-DTMX)/(ABS(DT)+EPSL).LE.EPSL ) DTO = DT
+      TM = TM + DT
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of TMSTEP group
+!
+      RETURN
+      END
+

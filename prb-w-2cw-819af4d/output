@@ -1,0 +1,411 @@
+ Welcome to ...
+
+
+                           STOMP
+        Subsurface Transport Over Multiple Phases
+
+
+ This file was produced by STOMP, a numerical simulator
+ developed by the Pacific Northwest Laboratory, with
+ support from the VOC-Arid Integrated Demonstration Project,
+ Office of Technology Development, U.S. Department of Energy.
+ Results from this version of STOMP should not be used for
+ license related applications.
+
+ For support:  Tel: 509.372.6070
+               E-mail:  mark.white@pnnl.gov
+
+                      ---  OUTPUT  ---
+
+
+ --- Input File Record ---
+
+
+ ~ Simulation Title Card: 
+
+Version Number: See Configuration Version Record Below
+Simulation Title: STOMP Example Problem W-2
+User Name: Mart Oostrom
+Company Name: PNNL
+Input Creation Date: June 03
+Input Creation Time: 15:00
+
+Simulation Notes:                                                                                                                   
+
+Two aquifer problem (Segol 1994, p. 423-432),                                                                                       
+Two aquifers (5 m thick) separated by an aquitard (10 m thick),                                                                     
+Pumping well is screened in the lower aquifer only,                                                                                 
+No drawdown allowed on other end,                                                                                                   
+
+
+ ~ Solution Control Card: 
+
+Execution Option:   Normal
+  w/ Static Domain
+MPI Preprocessing
+  w/ First-Order Time Differencing
+  w/ Standard Output on Convergence Failure
+  w/ No Memory Checking
+Linear System Solver: Lis
+  Preconditioner: ILU(k)
+  Solver: BiCGStab
+Operational Mode: STOMP-W
+  ECKEChem Solver is Gauss-Jordan Elimination
+Noncyclic Execution Periods
+Number of Execution Periods:      1
+
+  Execution Period No.      1
+  Execution Period Start Time, s:  0.0000E+00
+  Execution Period Stop Time, yr:  1.0000E+02
+  Initial Time Step, s:  3.6000E+01
+  Maximum Time Step, d:  5.0000E+01
+  Time Step Accleration Factor:  1.4140E+00
+  Maximum Newton Iterations per Step:   24
+  Maximum Convergence Residual:  1.0000E-06
+
+Maximum Number of Time Steps: 10000
+Solution Control Options
+
+Interfacial Averaging Schemes:
+  thermal conductivity: harmonic
+  aqueous density: upwind
+  gas density: upwind
+  napl density: upwind
+  aqueous viscosity: harmonic
+  gas viscosity: harmonic
+  napl viscosity: harmonic
+  aqueous relative permeability: upwind
+  gas relative permeability: upwind
+  napl relative permeability: upwind
+  intrinsic permeability: harmonic
+  gas diffusion: harmonic
+  gas diffusion: harmonic
+  aqueous diffusion: harmonic
+  aqueous diffusion: harmonic
+  solute diffusion: harmonic
+  hydraulic dispersion: harmonic
+  salt aqueous diffusion: harmonic
+  napl diffusion: harmonic
+  napl diffusion: harmonic
+
+
+ ~ Grid Card: 
+
+Cartesian Coordinate System
+
+Coordinate System Dimensions
+  Number of I-indexed Nodes:          49
+  Number of J-indexed Nodes:          49
+  Number of K-indexed Nodes:          20
+
+Processor System Dimensions
+  Number of I Processors:          2
+  Number of J Processors:          2
+  Number of K Processors:          1
+  Number Processors:          4
+
+Coordinate System Physical Dimensions
+
+X-Direction Coordinates
+  X(   1), m:  0.0000E+00  X(   2), m:  2.5000E-01  X(   3), m:  5.5000E-01  X(   4), m:  9.1000E-01  X(   5), m:  1.3400E+00
+  X(   6), m:  1.8700E+00  X(   7), m:  2.4900E+00  X(   8), m:  3.2400E+00  X(   9), m:  4.1500E+00  X(  10), m:  5.2300E+00
+  X(  11), m:  6.5400E+00  X(  12), m:  8.1100E+00  X(  13), m:  9.9900E+00  X(  14), m:  1.2250E+01  X(  15), m:  1.4970E+01
+  X(  16), m:  1.8240E+01  X(  17), m:  2.2160E+01  X(  18), m:  2.6880E+01  X(  19), m:  3.2540E+01  X(  20), m:  3.9350E+01
+  X(  21), m:  4.7530E+01  X(  22), m:  5.7350E+01  X(  23), m:  6.9160E+01  X(  24), m:  8.3350E+01  X(  25), m:  1.0039E+02
+  X(  26), m:  1.2087E+02  X(  27), m:  1.4548E+02  X(  28), m:  1.7504E+02  X(  29), m:  2.1056E+02  X(  30), m:  2.5324E+02
+  X(  31), m:  3.0452E+02  X(  32), m:  3.6613E+02  X(  33), m:  4.4015E+02  X(  34), m:  5.2909E+02  X(  35), m:  6.3596E+02
+  X(  36), m:  7.6435E+02  X(  37), m:  9.1862E+02  X(  38), m:  1.1040E+03  X(  39), m:  1.3267E+03  X(  40), m:  1.5942E+03
+  X(  41), m:  1.9157E+03  X(  42), m:  2.3020E+03  X(  43), m:  2.7661E+03  X(  44), m:  3.3237E+03  X(  45), m:  3.9937E+03
+  X(  46), m:  4.7987E+03  X(  47), m:  5.7659E+03  X(  48), m:  6.9280E+03  X(  49), m:  8.3242E+03  X(  50), m:  1.0000E+04
+
+Y-Direction Coordinates
+  Y(   1), m:  0.0000E+00  Y(   2), m:  2.5000E-01  Y(   3), m:  5.5000E-01  Y(   4), m:  9.1000E-01  Y(   5), m:  1.3400E+00
+  Y(   6), m:  1.8700E+00  Y(   7), m:  2.4900E+00  Y(   8), m:  3.2400E+00  Y(   9), m:  4.1500E+00  Y(  10), m:  5.2300E+00
+  Y(  11), m:  6.5400E+00  Y(  12), m:  8.1100E+00  Y(  13), m:  9.9900E+00  Y(  14), m:  1.2250E+01  Y(  15), m:  1.4970E+01
+  Y(  16), m:  1.8240E+01  Y(  17), m:  2.2160E+01  Y(  18), m:  2.6880E+01  Y(  19), m:  3.2540E+01  Y(  20), m:  3.9350E+01
+  Y(  21), m:  4.7530E+01  Y(  22), m:  5.7350E+01  Y(  23), m:  6.9160E+01  Y(  24), m:  8.3350E+01  Y(  25), m:  1.0039E+02
+  Y(  26), m:  1.2087E+02  Y(  27), m:  1.4548E+02  Y(  28), m:  1.7504E+02  Y(  29), m:  2.1056E+02  Y(  30), m:  2.5324E+02
+  Y(  31), m:  3.0452E+02  Y(  32), m:  3.6613E+02  Y(  33), m:  4.4015E+02  Y(  34), m:  5.2909E+02  Y(  35), m:  6.3596E+02
+  Y(  36), m:  7.6435E+02  Y(  37), m:  9.1862E+02  Y(  38), m:  1.1040E+03  Y(  39), m:  1.3267E+03  Y(  40), m:  1.5942E+03
+  Y(  41), m:  1.9157E+03  Y(  42), m:  2.3020E+03  Y(  43), m:  2.7661E+03  Y(  44), m:  3.3237E+03  Y(  45), m:  3.9937E+03
+  Y(  46), m:  4.7987E+03  Y(  47), m:  5.7659E+03  Y(  48), m:  6.9280E+03  Y(  49), m:  8.3242E+03  Y(  50), m:  1.0000E+04
+
+Z-Direction Coordinates
+  Z(   1), m:  0.0000E+00  Z(   2), m:  1.0000E+00  Z(   3), m:  2.0000E+00  Z(   4), m:  3.0000E+00  Z(   5), m:  4.0000E+00
+  Z(   6), m:  5.0000E+00  Z(   7), m:  6.0000E+00  Z(   8), m:  7.0000E+00  Z(   9), m:  8.0000E+00  Z(  10), m:  9.0000E+00
+  Z(  11), m:  1.0000E+01  Z(  12), m:  1.1000E+01  Z(  13), m:  1.2000E+01  Z(  14), m:  1.3000E+01  Z(  15), m:  1.4000E+01
+  Z(  16), m:  1.5000E+01  Z(  17), m:  1.6000E+01  Z(  18), m:  1.7000E+01  Z(  19), m:  1.8000E+01  Z(  20), m:  1.9000E+01
+  Z(  21), m:  2.0000E+01
+
+
+ --- Split Grid Record  ---
+
+
+
+ ~ Rock/Soil Zonation Card: 
+
+Rock/Soil Name: aquifer1                                                        
+  Rock/Soil Domain:
+    I =      1 to     49
+    J =      1 to     49
+    K =     16 to     20
+
+
+
+Rock/Soil Name: aquitard                                                        
+  Rock/Soil Domain:
+    I =      1 to     49
+    J =      1 to     49
+    K =      6 to     15
+
+
+
+Rock/Soil Name: aquifer2                                                        
+  Rock/Soil Domain:
+    I =      1 to     49
+    J =      1 to     49
+    K =      1 to      5
+NOTE: Missing Inactive Nodes Card
+
+
+ ~ Rock/Soil Mechanical Properties Card: 
+
+Rock/Soil Name: aquifer1                                                        
+  Particle Density, kg/m^3:  2.6500E+03 ( 2.6500E+03, kg/m^3)
+  Total Porosity:  3.0000E-01
+  Diffusive Porosity:  3.0000E-01
+  Fixed Bulk Volume Model
+  Specific Storage, 1/m:  1.0000E-04 ( 1.0000E-04, 1/m)
+  Bulk Compressibility, 1/Pa:  1.0073E-08
+
+
+
+Rock/Soil Name: aquitard                                                        
+  Particle Density, kg/m^3:  2.6500E+03 ( 2.6500E+03, kg/m^3)
+  Total Porosity:  4.3000E-01
+  Diffusive Porosity:  4.3000E-01
+  Fixed Bulk Volume Model
+  Specific Storage, 1/m:  8.0000E-04 ( 8.0000E-04, 1/m)
+  Bulk Compressibility, 1/Pa:  8.1489E-08
+
+
+
+Rock/Soil Name: aquifer2                                                        
+  Particle Density, kg/m^3:  2.6500E+03 ( 2.6500E+03, kg/m^3)
+  Total Porosity:  3.0000E-01
+  Diffusive Porosity:  3.0000E-01
+  Fixed Bulk Volume Model
+  Specific Storage, 1/m:  1.0000E-04 ( 1.0000E-04, 1/m)
+  Bulk Compressibility, 1/Pa:  1.0073E-08
+
+
+ ~ Rock/Soil Hydraulic Properties Card: 
+
+Rock/Soil Name: aquifer1                                                        
+  X-Direction Matrix Intrinsic Permeability, hc m/s:  2.0000E-05 ( 2.0782E-12, m^2)
+  Y-Direction Matrix Intrinsic Permeability, hc m/s:  2.0000E-05 ( 2.0782E-12, m^2)
+  Z-Direction Matrix Intrinsic Permeability, hc m/s:  2.0000E-05 ( 2.0782E-12, m^2)
+
+
+
+Rock/Soil Name: aquitard                                                        
+  X-Direction Matrix Intrinsic Permeability, hc m/s:  1.0000E-08 ( 1.0391E-15, m^2)
+  Y-Direction Matrix Intrinsic Permeability, hc m/s:  1.0000E-08 ( 1.0391E-15, m^2)
+  Z-Direction Matrix Intrinsic Permeability, hc m/s:  1.0000E-08 ( 1.0391E-15, m^2)
+
+
+
+Rock/Soil Name: aquifer2                                                        
+  X-Direction Matrix Intrinsic Permeability, hc m/s:  2.0000E-05 ( 2.0782E-12, m^2)
+  Y-Direction Matrix Intrinsic Permeability, hc m/s:  2.0000E-05 ( 2.0782E-12, m^2)
+  Z-Direction Matrix Intrinsic Permeability, hc m/s:  2.0000E-05 ( 2.0782E-12, m^2)
+
+
+ ~ Rock/Soil Saturation Function Card: 
+
+Rock/Soil Name: aquifer1                                                        
+van Genuchten Function
+  van Genuchten (alpha), 1/cm:  1.3300E-01 ( 1.3300E+01, 1/m)
+  van Genuchten (n): 1.8800E+00
+  van Genuchten (residual saturation): 2.6800E-01
+  van Genuchten (m):  0.0000E+00
+
+
+
+Rock/Soil Name: aquitard                                                        
+van Genuchten Function
+  van Genuchten (alpha), 1/cm:  1.3300E-01 ( 1.3300E+01, 1/m)
+  van Genuchten (n): 1.8800E+00
+  van Genuchten (residual saturation): 2.6800E-01
+  van Genuchten (m):  0.0000E+00
+
+
+
+Rock/Soil Name: aquifer2                                                        
+van Genuchten Function
+  van Genuchten (alpha), 1/cm:  1.3300E-01 ( 1.3300E+01, 1/m)
+  van Genuchten (n): 1.8800E+00
+  van Genuchten (residual saturation): 2.6800E-01
+  van Genuchten (m):  0.0000E+00
+
+
+ ~ Rock/Soil Aqueous Relative Permeability Function Card: 
+
+Rock/Soil Name: aquifer1                                                        
+  Mualem Porosity Distribution Model
+    m Parameter:  4.6809E-01
+
+
+
+Rock/Soil Name: aquitard                                                        
+  Mualem Porosity Distribution Model
+    m Parameter:  4.6809E-01
+
+
+
+Rock/Soil Name: aquifer2                                                        
+  Mualem Porosity Distribution Model
+    m Parameter:  4.6809E-01
+
+
+ ~ Coupled Well Card: 
+
+Coupled Well Type:   Volumetric Rate Production Well
+  X-Well Fraction Factor:  5.0000E-01
+  Y-Well Fraction Factor:  5.0000E-01
+  Z-Well Fraction Factor:  1.0000E+00
+  Total Volumetric Withdrawn/Produced Limit, m^3:  1.0000E+05 ( 1.0000E+05, m^3)
+  Well Name                                : VPW
+  Interval First X-Transition Point, m:  1.2500E-01 ( 1.2500E-01, m)
+  Interval First Y-Transition Point, m:  1.2500E-01 ( 1.2500E-01, m)
+  Interval First Z-Transition Point, m:  5.0000E+00 ( 5.0000E+00, m)
+  Interval Second X-Transition Point, m:  1.2500E-01 ( 1.2500E-01, m)
+  Interval Second Y-Transition Point, m:  1.2500E-01 ( 1.2500E-01, m)
+  Interval Second Z-Transition Point, m:  0.0000E+00 ( 0.0000E+00, m)
+  Interval Well-Bore Radius, in:  4.5000E+00 ( 1.1430E-01, m)
+  Interval Skin Factor:  0.0000E+00
+  Screened Well Interval
+  Well Time, yr:  0.0000E+00 ( 0.0000E+00, s)
+    Withdrawl/Production Volumetric Flow Rate, m^3/day:  3.4125E+01 ( 3.9497E-04, m^3/s)
+    Minimum Well-Bottom Pressure, pa:  1.0132E+05 ( 1.0132E+05, Pa)
+
+
+ ~ Initial Conditions Card: 
+
+Initial Saturation Option:
+  gas pressure                                                    
+  aqueous pressure                                                
+
+Initial Condition Variable(s) and Domain(s)
+  aqueous pressure, pa:  6.8404E+05
+  X-Direction Gradient,   , null:  0.0000E+00 ( 0.0000E+00, 1/m)
+  Y-Direction Gradient,   , null:  0.0000E+00 ( 0.0000E+00, 1/m)
+  Z-Direction Gradient,   , 1/m: -9.7935E+03 (-9.7935E+03, 1/m)
+    Domain: 
+      I =      1 to     49
+      J =      1 to     49
+      K =      1 to     20
+
+
+ ~ Boundary Conditions Card: 
+
+Boundary Condition Orientation:X-Direction: East Surface
+Boundary Condition Type:   Hydraulic Gradient               Aqueous
+Boundary Condition Domain:
+  I =     49 to     49
+  J =      1 to     49
+  K =      1 to     20
+Noncyclic Boundary Conditions
+Boundary Condition Times and Variables:
+  Boundary Time, d:  0.0000E+00 ( 0.0000E+00, s)
+  Base Aqueous pa:  6.8404E+05 ( 6.8404E+05, Pa)
+
+
+
+Boundary Condition Orientation:Y-Direction: North Surface
+Boundary Condition Type:   Hydraulic Gradient               Aqueous
+Boundary Condition Domain:
+  I =      1 to     49
+  J =     49 to     49
+  K =      1 to     20
+Noncyclic Boundary Conditions
+Boundary Condition Times and Variables:
+  Boundary Time, d:  0.0000E+00 ( 0.0000E+00, s)
+  Base Aqueous pa:  6.8404E+05 ( 6.8404E+05, Pa)
+NOTE: Missing Source Card
+
+
+ ~ Output Control Card: 
+
+Reference Node No. and Indices:      4
+  Reference Node No. 4953  I = 4  J = 4  K = 3  Indices
+  Reference Node No. 5153  I = 8  J = 8  K = 3  Indices
+  Reference Node No. 40968  I = 4  J = 4  K = 18  Indices
+  Reference Node No. 21960  I = 8  J = 8  K = 10  Indices
+
+Reference Node Screen Output Frequency: Every      1 Time Step(s)
+Reference Node Output File Frequency: Every      1 Time Step(s)
+Time Output Units: yr
+Length Output Units: m
+Screen Significant Digits:  6
+Output File Significant Digits:  6
+Plot File Significant Digits:  6
+
+Reference Node Variables:      6
+  aqueous saturation, null
+  aqueous pressure, pa
+  aqueous hydraulic head, m
+  coupled-well pressure: well #  1, pa
+  coupled-well volumetric rate: well #  1, m^3/day
+  coupled-well mass rate: well #  1, kg/day
+
+ Plot File Output Times:
+   5.0000E-01 d
+   1.0000E+00 d
+   1.0000E+00 yr
+   1.0000E+01 yr
+   5.0000E+01 yr
+  After the Final Time Step
+
+Plot File Variables:
+  no restart, null
+  aqueous hydraulic head, m
+  aqueous pressure, pa
+  aqueous saturation, null
+  xnc aqueous volumetric flux, m/hr
+  znc aqueous volumetric flux, m/hr
+
+
+ ~ Surface Flux Card: 
+
+Surface Flux Type:Aqueous-Phase Volumetric Flux Surface
+Surface Flux Orientation:X-Direction: East Surface
+
+Surface Flux Domain:
+  I =     49 to     49
+  J =      1 to     49
+  K =      1 to     20
+
+
+
+Surface Flux Type:Aqueous-Phase Volumetric Flux Surface
+Surface Flux Orientation:Y-Direction: North Surface
+
+Surface Flux Domain:
+  I =      1 to     49
+  J =     49 to     49
+  K =      1 to     20
+
+
+ --- Coupled-Well Node Record  ---
+
+  Nodes Containing Coupled-Well Number:    1 Coupled-Well Name: VPW1
+ (  1,  1,  5:    9605)
+ (  1,  1,  4:    7204)
+ (  1,  1,  3:    4803)
+ (  1,  1,  2:    2402)
+ (  1,  1,  1:       1)
+NOTE: Preprocessing for STOMPX-W
+
+---  End of STOMPX-W Preprocessing  ---
+

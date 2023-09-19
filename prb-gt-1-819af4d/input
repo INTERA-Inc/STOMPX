@@ -1,0 +1,120 @@
+#-------------------------------------------------------
+~Simulation Title Card
+#-------------------------------------------------------
+v3.1,
+STOMP Example Problem GT-1,
+Mark White,
+PNNL,
+August 2018,
+15:15,
+4,
+This application problem follows the heat-pipe problem solved
+semi-analytically by Udell and Fitch. The soil moisture retention
+function has been changed to a modified van Genuchten function to
+allow saturations for all matric suctions.
+
+#-------------------------------------------------------
+~Solution Control Card
+#-------------------------------------------------------
+Normal,
+Geothermal with isobrine,
+3,
+0,day,10,day,1,s,0.1,day,1.25,16,1.e-06,
+10,day,100,day,0.1,day,0.25,day,1.25,16,1.e-06,
+100,day,10000,day,0.25,day,1000,day,1.25,16,1.e-06,
+10000,
+Variable Aqueous Diffusion,
+Variable Gas Diffusion,
+0,
+
+#-------------------------------------------------------
+~Grid Card
+#-------------------------------------------------------
+Uniform Cartesian,
+50,1,1,
+4.5,cm,
+10.0,cm,
+10.0,cm,
+
+#-------------------------------------------------------
+~Rock/Soil Zonation Card
+#-------------------------------------------------------
+1,
+Sand,1,50,1,1,1,1,
+
+#-------------------------------------------------------
+~Mechanical Properties Card
+#-------------------------------------------------------
+Sand,2650,kg/m^3,0.4,0.4,,,Constant,0.5,0.5,
+
+#-------------------------------------------------------
+~Hydraulic Properties Card
+#-------------------------------------------------------
+Sand,1.e-12,m^2,,,,,
+
+#-------------------------------------------------------
+~Thermal Properties Card
+#-------------------------------------------------------
+Sand,Somerton,0.582,W/m K,,,,,1.13,W/m K,,,,,700,J/kg K,
+
+#-------------------------------------------------------
+~Saturation Function Card
+#-------------------------------------------------------
+Sand,van Genuchten w/ Webb,1.563,1/m,5.4,0.15,,,
+
+#-------------------------------------------------------
+~Aqueous Relative Permeability Card
+#-------------------------------------------------------
+Sand,Fatt and Klikoff,
+
+#-------------------------------------------------------
+~Gas Relative Permeability Card
+#-------------------------------------------------------
+Sand,Fatt and Klikoff,
+
+#-------------------------------------------------------
+~Initial Conditions Card
+#-------------------------------------------------------
+Aqueous Saturation,Gas Pressure,
+3,
+Aqueous Saturation,0.7,,,,,,,,1,50,1,1,1,1,
+Gas Pressure,101330,Pa,,,,,,,1,50,1,1,1,1,
+Temperature,70.0,C,,,,,,,1,50,1,1,1,1,
+
+#-------------------------------------------------------
+~Boundary Conditions Card
+#-------------------------------------------------------
+2,
+West,Dirichlet Energy,Dirichlet Fluid Flow,BC1,Air Relative Saturation,Salt Relative Saturation,
+1,1,1,1,1,1,1,
+0,day,70,C,101330,Pa,1.0,0.0,
+East,Neumann Energy,
+50,50,1,1,1,1,1,
+0,day,-70,W/m^2,,
+
+#-------------------------------------------------------
+~Output Options Card
+#-------------------------------------------------------
+2,
+1,1,1,
+50,1,1,
+1,1,day,m,5,5,5,
+6,
+Temperature,,
+Aqueous saturation,,
+Phase condition,,
+Water gas mass frac.,,
+Aqueous pressure,,
+Gas pressure,,
+4,
+2,day,
+5,day,
+10,day,
+100,day,
+6,
+Temperature,,
+Aqueous saturation,,
+Phase condition,,
+Water gas mass frac.,,
+Aqueous pressure,,
+Gas pressure,,

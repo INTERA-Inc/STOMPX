@@ -1,0 +1,3171 @@
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_BCV
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for solution control variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 26 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE SOLTN
+      USE GRID
+      USE GLB_PAR
+      USE BCV
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/ALLOC_BCV'
+      ALLOCATE( BC(1:LBCV,1:LBTM,1:LBCIN),STAT=ISTAT )
+      CHMSG = 'BC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      LBCX = MAX( NBC(ID+1),1 )
+      ALLOCATE( XPBC(1:LBCX),STAT=ISTAT )
+      CHMSG = 'XPBC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YPBC(1:LBCX),STAT=ISTAT )
+      CHMSG = 'YPBC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ZPBC(1:LBCX),STAT=ISTAT )
+      CHMSG = 'ZPBC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCN(1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCD(1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCD'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCM(1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCIN(1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCIN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCC(1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      LX = LUK+LSOLU*LC
+      ALLOCATE( IBCT(1:LX,1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCSP(1:LSPBC+1,1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCSP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of ALLOC_BCV group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_BCVH
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate array memory for hydrate boundary condition variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 16 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE GRID
+      USE GLB_PAR
+      USE BCVH
+      USE BCV
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      LBCX = MAX( NBC(ID+1),1 )
+      ALLOCATE( XLNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XLNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMLNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMLNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SHB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'SHB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PVNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'PVNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XGNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XGNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMGNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMGNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XNAB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XNAB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XNNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XNNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XNOB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XNOB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XNWB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XNWB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMNAB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMNAB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMNNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMNNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMNOB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMNOB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMNWB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMNWB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFNAB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'DFNAB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFNNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'DFNNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFNOB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'DFNOB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFNWB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'DFNWB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  End of ALLOC_BCVH group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_BCVP
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate array memory for general boundary condition variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 16 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE GRID
+      USE GLB_PAR
+      USE BCVP
+      USE BCV
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      LBCX = MAX( NBC(ID+1),1 )
+      ALLOCATE( TB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'TB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PLB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'PLB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PGB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'PGB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'PNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PSOB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'PSOB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( POSMB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'POSMB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOGB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'RHOGB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHONB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'RHONB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOLB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'RHOLB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XGAB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XGAB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XGOB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XGOB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XGWB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XGWB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMGAB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMGAB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMGOB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMGOB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMGWB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMGWB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLAB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XLAB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLOB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XLOB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLWB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XLWB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMLAB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMLAB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMLOB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMLOB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMLWB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMLWB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RKGB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'RKGB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RKLB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'RKLB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RKNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'RKNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PVAB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'PVAB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PVOB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'PVOB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PVWB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'PVWB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFLOB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'DFLOB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFLNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'DFLNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFLAB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'DFLAB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFLSB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'DFLSB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SGB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'SGB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SLB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'SLB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SIB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'SIB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'SNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SSB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'SSB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YLSB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'YLSB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLSB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XLSB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMLSB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'XMLSB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMSB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'TMSB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOMLB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'RHOMLB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOMGB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'RHOMGB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOMNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'RHOMNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFGOB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'DFGOB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFGNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'DFGNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFGAB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'DFGAB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFGWB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'DFGWB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PORDB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'PORDB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PORTB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'PORTB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TORGB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'TORGB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TORLB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'TORLB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TORNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'TORNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HGAB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'HGAB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HGOB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'HGOB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HGB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'HGB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'HNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UEGB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'UEGB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UELB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'UELB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UENB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'UENB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HGWB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'HGWB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HLB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'HLB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HLWB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'HLWB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VISGB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'VISGB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VISLB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'VISLB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VISNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'VISNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( THKGB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'THKGB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( THKLB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'THKLB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( THKNB(1:LSV,1:LBCX),STAT=ISTAT )
+      CHMSG = 'THKNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  End of ALLOC_BCVP group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_COUP_WELL
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate array memory for coupled-well variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 13 December 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE SOLTN
+      USE GRID
+      USE GLB_PAR
+      USE COUP_WELL
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/ALLOC_COUP_WELL'
+      ALLOCATE( DNR_CW(1:LN_CW),STAT=ISTAT )
+      CHMSG = 'DNR_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DP_CW(1:LN_CW),STAT=ISTAT )
+      CHMSG = 'DP_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( FF_CW(1:3,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'FF_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( FX_CW(1:LN_CW),STAT=ISTAT )
+      CHMSG = 'FX_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( FXA_CW(1:(LUK+2),1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'FXA_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( FXS_CW(1:(LUK+2),1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'FXS_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( FXW_CW(1:(LUK+2),1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'FXW_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( P_CW(1:3,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'P_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PF_CW(1:LWF_CW),STAT=ISTAT )
+      CHMSG = 'PF_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PL_CW(1:LN_CW),STAT=ISTAT )
+      CHMSG = 'PL_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOF_CW(1:LN_CW),STAT=ISTAT )
+      CHMSG = 'RHOF_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( Q_CW(1:4,1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'Q_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( QM_CW(1:8,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'QM_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RS_CW(1:(LUK_CW+1),1:LN_CW),STAT=ISTAT )
+      CHMSG = 'RS_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PAR_CW(1:5,1:LWI_CW),STAT=ISTAT )
+      CHMSG = 'PAR_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TML_CW(1:LN_CW),STAT=ISTAT )
+      CHMSG = 'TML_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VAR_CW(1:7+LNGC,1:LWT_CW,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'VAR_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VARC_CW(1:LSOLU_CW,1:LWT_CW,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'VARC_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VARSP_CW(1:LSPC_CW,1:LWT_CW,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'VARSP_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PLX_CW(1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'PLX_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PLY_CW(1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'PLY_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PLZ_CW(1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'PLZ_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XP_CW(1:2,1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'XP_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YP_CW(1:2,1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'YP_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ZP_CW(1:2,1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'ZP_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XTP_CW(1:2,1:LWI_CW),STAT=ISTAT )
+      CHMSG = 'XTP_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YTP_CW(1:2,1:LWI_CW),STAT=ISTAT )
+      CHMSG = 'YTP_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ZTP_CW(1:2,1:LWI_CW),STAT=ISTAT )
+      CHMSG = 'ZTP_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WNM_CW(1:LN_CW),STAT=ISTAT )
+      CHMSG = 'WNM_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( T_CW(1:2,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'T_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TF_CW(1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'TF_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ICC_CW(1:LN_CW),STAT=ISTAT )
+      CHMSG = 'ICC_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ID_CW(1:10,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'ID_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IM_CW(1:LN_CW),STAT=ISTAT )
+      CHMSG = 'IM_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IMP_CW(1:LWTP_CW,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'IMP_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( INV_CW(1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'INV_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IREF_CW(1:LVREF),STAT=ISTAT )
+      CHMSG = 'IREF_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IS_CW(1:LWI_CW),STAT=ISTAT )
+      CHMSG = 'IS_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISOLU_CW(1:LSOLU_CW,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'ISOLU_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISPC_CW(1:LSPC_CW,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'ISPC_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISOLC_CW(1:LEQC,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'ISOLC_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISOLK_CW(1:LEQK,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'ISOLK_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ITS_CW(1:LWTP_CW,1:LN_CW),STAT=ISTAT )
+      CHMSG = 'ITS_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IT_CW(1:LN_CW),STAT=ISTAT )
+      CHMSG = 'IT_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IWFG_CW(1:LWF_CW),STAT=ISTAT )
+      CHMSG = 'IWFG_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IWF_CW(1:LWF_CW),STAT=ISTAT )
+      CHMSG = 'IWF_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IXPG_CW(1:LWF_CW),STAT=ISTAT )
+      CHMSG = 'IXPG_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IWNG_CW(1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'IWNG_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IWN_CW(1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'IWN_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IWP_CW(1:LWN_CW),STAT=ISTAT )
+      CHMSG = 'IWP_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( JM_CW(1:LN_CW),STAT=ISTAT )
+      CHMSG = 'JM_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NSP_CW(1:LN_CW),STAT=ISTAT )
+      CHMSG = 'NSP_CW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of ALLOC_COUP_WELL group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_FDVH
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for hydrate field variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 16 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE GRID
+      USE GLB_PAR
+      USE FDVH
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ALLOCATE( HCPP(1:30,1:LNHC),STAT=ISTAT )
+      CHMSG = 'HCPP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XHW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XHW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XHA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XHA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XHO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XHO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XHN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XHN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XGN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XGN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMGN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMGN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XLN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMLN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMLN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOH(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RHOH'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( THKH(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'THKH'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HH(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'HH'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PH(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PH'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SH(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SH'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UEGA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UEGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YMGA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'YMGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YMGO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'YMGO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YMGN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'YMGN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YMHGA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'YMHGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YMHGO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'YMHGO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YMHGN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'YMHGN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PVHA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PVHA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PVHN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PVHN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PVHO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PVHO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PVN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PVN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMHA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TMHA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMHO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TMHO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMHN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TMHN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ZMCA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ZMCA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ZMCO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ZMCO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ZMCN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ZMCN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XNA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XNA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XNN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XNN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XNO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XNO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XNW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XNW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMNA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMNA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMNN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMNN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMNO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMNO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMNW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMNW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFNA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DFNA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFNN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DFNN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFNO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DFNO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFNW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DFNW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOI(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RHOI'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( THKI(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'THKI'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HI(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'HI'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PPEL(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PPEL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PPEU(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PPEU'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TCR(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TCR'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TCT(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TCT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  End of ALLOC_FDVH group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_FDVP
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for field variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 16 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE GRID
+      USE GLB_PAR
+      USE FDVP
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ALLOCATE( T(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'T'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PL(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PG(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PSO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PSO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( POSM(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'POSM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DNR(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DNR'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOG(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RHOG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHON(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RHON'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOL(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RHOL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XGA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XGO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XGO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XGW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XGW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMGA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMGO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMGO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMGW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMGW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XLA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XLO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XLW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMLA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMLA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMLO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMLO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMLW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMLW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RKG(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RKG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RKL(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RKL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RKN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RKN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PVA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PVA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PVO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PVO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PVW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PVW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PI(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PI'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFLO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DFLO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFLN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DFLN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFLA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DFLA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFLS(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DFLS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SG(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SL(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SI(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SI'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SS(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YLS(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'YLS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLS(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XLS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XMLS(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XMLS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOSP(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RHOSP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HSP(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'HSP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMS(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TMS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOML(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RHOML'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOMG(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RHOMG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOMN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RHOMN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFGO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DFGO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFGN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DFGN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFGA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DFGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DFGW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DFGW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PORD(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PORD'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PORT(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PORT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PERMRF(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PERMRF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( POR0(1:3,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'POR0'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TORG(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TORG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TORL(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TORL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TORN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TORN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HGA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'HGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HGO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'HGO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HG(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'HG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'HN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HL(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'HL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HGW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'HGW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HLW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'HLW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UEG(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UEG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UEL(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UEL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UEN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UEN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMBP_A(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TMBP_A'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMBP_N(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TMBP_N'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMBP_O(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TMBP_O'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VISG(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VISG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VISL(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VISL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VISN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VISN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( THKG(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'THKG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( THKL(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'THKL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( THKN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'THKN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RSDL(1:LUK,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RSDL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NPHAZ(1:LSU,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'NPHAZ'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  End of ALLOC_FDVP group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_FLUX
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for flux variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 30 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE NAPL
+      USE FLUX
+      USE GRID
+      USE GLB_PAR
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ALLOCATE( UL(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VL(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WL(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UG(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VG(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WG(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDGA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDGA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDGA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UGA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VGA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WGA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WGA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDGN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDGN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDGN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDGN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDGN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDGN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UGN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UGN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VGN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VGN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WGN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WGN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDGO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDGO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDGO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDGO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDGO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDGO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UGO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UGO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VGO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VGO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WGO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WGO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDGW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDGW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDGW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDGW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDGW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDGW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UGW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UGW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VGW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VGW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WGW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WGW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDLA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDLA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDLA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDLA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDLA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDLA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ULA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ULA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VLA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VLA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WLA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WLA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDLN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDLN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDLN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDLN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDLN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDLN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ULN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ULN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VLN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VLN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WLN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WLN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDLO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDLO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDLO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDLO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDLO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDLO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ULO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ULO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VLO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VLO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WLO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WLO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDLW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDLW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDLW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDLW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDLW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDLW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ULW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ULW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VLW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VLW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WLW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WLW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDNA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDNA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDNA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDNA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDNA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDNA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UNA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UNA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VNA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VNA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WNA(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WNA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDNN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDNN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDNN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDNN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDNN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDNN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UNN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UNN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VNN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VNN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WNN(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WNN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDNO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDNO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDNO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDNO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDNO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDNO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UNO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UNO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VNO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VNO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WNO(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WNO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDNW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDNW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDNW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDNW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDNW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDNW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UNW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UNW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VNW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VNW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WNW(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WNW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UDS(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UDS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VDS(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VDS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WDS(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WDS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( US(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'US'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VS(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WS(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UQ(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'UQ'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VQ(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VQ'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WQ(1:LSFV,1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'WQ'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  End of ALLOC_FLUX group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_GMBC
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for geomechanical boundary
+!     condition variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 4 October 2022
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE SOLTN
+      USE GRID
+      USE GLB_PAR
+      USE GEO_MECH
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/ALLOC_GMBC'
+      ALLOCATE( BC_GM(1:LBCV_GM,1:LBTM_GM,1:LBCIN_GM),STAT=ISTAT )
+      CHMSG = 'BC_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      LBCX = MAX( NBC_GM(ID+1),1 )
+      ALLOCATE( IBCT_GM(1:3,1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCT_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCM_GM(1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCM_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCC_GM(1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCC_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCN_GM(1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCN_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCIN_GM(1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCIN_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCD_GM(1:LBCX),STAT=ISTAT )
+      CHMSG = 'IBCD_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCR_GM(1:LBCIN_GM),STAT=ISTAT )
+      CHMSG = 'IBCR_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of ALLOC_GMBC group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_GMEC
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for geomechanics variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 4 October 2022
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE SOLTN
+      USE GRID
+      USE GLB_PAR
+      USE GEO_MECH
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/ALLOC_GMEC'
+      ALLOCATE( PROP_GM(1:7,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PROP_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IPROP_GM(1:3,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'IPROP_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IHCM_GM(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'IHCM_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( EPS_GM(1:6,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'EPS_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SIG_GM(1:6,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SIG_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( P_GM(1:3,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'P_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( EPSV_GM(1:3,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'EPSV_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( EPSV_CMP(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'EPSV_CMP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SIGV_GM(1:3,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SIGV_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RSDM_GM(1:LEPD),STAT=ISTAT )
+      CHMSG = 'RSDM_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( U_GM(1:2,1:NFNGN(ID+1)),STAT=ISTAT )
+      CHMSG = 'U_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( V_GM(1:2,1:NFNGN(ID+1)),STAT=ISTAT )
+      CHMSG = 'V_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( W_GM(1:2,1:NFNGN(ID+1)),STAT=ISTAT )
+      CHMSG = 'W_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IM_GM(1:NFNGN(ID+1)),STAT=ISTAT )
+      CHMSG = 'IM_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NE_GM(1:8,1:NFNGN(ID+1)),STAT=ISTAT )
+      CHMSG = 'NE_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NK_GM(1:8,1:8),STAT=ISTAT )
+      CHMSG = 'NK_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NF_GM(1:NFNGN(ID+1)),STAT=ISTAT )
+      CHMSG = 'NF_GM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IGHN(1:NFNGN(ID+1)),STAT=ISTAT )
+      CHMSG = 'IGHN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of ALLOC_GMEC group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_GRID
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for grid variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 25 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE SOLTN
+      USE GRID
+      USE GLB_PAR
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/ALLOC_GRID'
+      ALLOCATE( AFX(1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'AFX'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( AFY(1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'AFY'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( AFZ(1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'AFZ'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DXGP(1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DXGP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DYGP(1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DYGP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DZGP(1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DZGP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( GRVX(1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'GRVX'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( GRVY(1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'GRVY'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( GRVZ(1:2,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'GRVZ'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XE(1:8,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XE'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YE(1:8,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'YE'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ZE(1:8,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ZE'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RP(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XP(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'XP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YP(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'YP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ZP(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ZP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VOL(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'VOL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DXGF(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DXGF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DYGF(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DYGF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DZGF(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DZGF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ICM(1:6,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ICM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( INBS(1:6,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'INBS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IXP(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'IXP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IGHC(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'IGHC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ND(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ND'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ITAG(1:NP,1:NP),STAT=ISTAT )
+      CHMSG = 'ITAG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of ALLOC_GRID group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_HYDT
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for ternary hydrate variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 16 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE SOLTN
+      USE HYDT
+      USE GRID
+      USE GLB_PAR
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ALLOCATE( P_TA(1:LP_TA,1:LNNGC),STAT=ISTAT )
+      CHMSG = 'P_TA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( T_TA(1:LT_TA,1:LP_TA,1:LNNGC),STAT=ISTAT )
+      CHMSG = 'T_TA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( H_TA(1:LT_TA,1:LP_TA,1:LNNGC),STAT=ISTAT )
+      CHMSG = 'H_TA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( U_TA(1:LT_TA,1:LP_TA,1:LNNGC),STAT=ISTAT )
+      CHMSG = 'U_TA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( T_LV(1:L_LV,1:LNNGC),STAT=ISTAT )
+      CHMSG = 'T_LV'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HL_LV(1:L_LV,1:LNNGC),STAT=ISTAT )
+      CHMSG = 'HL_LV'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UL_LV(1:L_LV,1:LNNGC),STAT=ISTAT )
+      CHMSG = 'UL_LV'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HV_LV(1:L_LV,1:LNNGC),STAT=ISTAT )
+      CHMSG = 'HV_LV'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UV_LV(1:L_LV,1:LNNGC),STAT=ISTAT )
+      CHMSG = 'UV_LV'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CINH(1:6,1:LINH),STAT=ISTAT )
+      CHMSG = 'CINH'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLIMX(1:LINH),STAT=ISTAT )
+      CHMSG = 'XLIMX'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( INHNM(1:LINH),STAT=ISTAT )
+      CHMSG = 'INHNM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ZPC_HT(1:LHF_HT,1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'ZPC_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ZHC_HT(1:LHF_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'ZHC_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TCR_HT(1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'TCR_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PCR_HT(1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'PCR_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TCB_HT(1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'TCB_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PCB_HT(1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'PCB_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TCT_HT(1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'TCT_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PCT_HT(1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'PCT_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TLE_HT(1:LPE_HT,1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'TLE_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PLE_HT(1:LPE_HT,1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'PLE_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( D2PLE_HT(1:LPE_HT,1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'D2PLE_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( FKLE_HT(1:LPE_HT,1:LCP_HT,1:LHF_HT),STAT=ISTAT )
+      CHMSG = 'FKLE_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( D2FKLE_HT(1:LPE_HT,1:LCP_HT,1:LHF_HT),STAT=ISTAT )
+      CHMSG = 'D2FKLE_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TUE_HT(1:LPE_HT,1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'TUE_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PUE_HT(1:LPE_HT,1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'PUE_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( D2PUE_HT(1:LPE_HT,1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'D2PUE_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( FKUE_HT(1:LPE_HT,1:LCP_HT,1:LHF_HT),STAT=ISTAT )
+      CHMSG = 'FKUE_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( D2FKUE_HT(1:LPE_HT,1:LCP_HT,1:LHF_HT),STAT=ISTAT )
+      CHMSG = 'D2FKUE_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( T2P_HT(1:LTP_HT,1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'T2P_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( P2P_HT(1:LPP_HT,1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'P2P_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( B2P_HT(1:LTP_HT,1:LPP_HT,1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'B2P_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( D2B2P_HT(1:LTP_HT,1:LPP_HT,1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'D2B2P_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( FK2P_HT(1:LTP_HT,1:LPP_HT,1:LCP_HT,1:LHF_HT),
+     &  STAT=ISTAT )
+      CHMSG = 'FK2P_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( D2FK2P_HT(1:LTP_HT,1:LPP_HT,1:LCP_HT,1:LHF_HT),
+     &  STAT=ISTAT )
+      CHMSG = 'D2FK2P_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( THE_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'THE_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PHE_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'PHE_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XSCA_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'XSCA_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XSCO_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'XSCO_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XSCN_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'XSCN_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLCA_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'XLCA_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLCO_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'XLCO_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLCN_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'XLCN_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( THE2P_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'THE2P_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XSCA2T_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'XSCA2T_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XSCO2T_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'XSCO2T_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XSCN2T_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'XSCN2T_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLCA2T_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'XLCA2T_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLCO2T_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'XLCO2T_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( XLCN2T_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'XLCN2T_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PHE2T_HT(1:LHE_HT,1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'PHE2T_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ZMIH_HT(1:LHF_HT),STAT=ISTAT )
+      CHMSG = 'ZMIH_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NPEP_HT(1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'NPEP_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NHEP_HT(1:LCH_HT),STAT=ISTAT )
+      CHMSG = 'NHEP_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NTP_HT(1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'NTP_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NPP_HT(1:LCP_HT),STAT=ISTAT )
+      CHMSG = 'NPP_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IZP_HT(1:LCN_HT,1:LCN_HT),STAT=ISTAT )
+      CHMSG = 'IZP_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IZH_HT(1:LCN_HT,1:LCN_HT),STAT=ISTAT )
+      CHMSG = 'IZH_HT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( I_LV(1:LNNGC),STAT=ISTAT )
+      CHMSG = 'I_LV'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IPTP(1:LNNGC),STAT=ISTAT )
+      CHMSG = 'IPTP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IPCR(1:LNNGC),STAT=ISTAT )
+      CHMSG = 'IPCR'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IP_TA(1:LNNGC),STAT=ISTAT )
+      CHMSG = 'IP_TA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IT_TA(1:LP_TA,1:LNNGC),STAT=ISTAT )
+      CHMSG = 'IT_TA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IV_TA(1:LP_TA,1:LNNGC),STAT=ISTAT )
+      CHMSG = 'IV_TA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  End of ALLOC_HYDT group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_HYST
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for hysteretic k-s-P function 
+!     variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 23 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE SOLTN
+      USE GRID
+      USE GLB_PAR
+      USE HYST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/ALLOC_HYST'
+      ALLOCATE( ASL(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ASL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( AST(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'AST'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ASLMIN(1:LSU,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ASLMIN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ASTMAX(1:LSU,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ASTMAX'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ASTMIN(1:LSU,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ASTMIN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ASNT(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ASNT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ASNR(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ASNR'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ASGT(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ASGT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SGT(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SGT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SNR(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SNR'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SNT(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SNT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ASGTL(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ASGTL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ASGTN(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ASGTN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SGTL(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SGTL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SGTN(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SGTN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SLSC(1:LSU,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SLSC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ASLSC(1:LSU,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ASLSC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HDSC(1:LSU,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'HDSC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IPH(1:LSU,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'IPH'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of ALLOC_HYST group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_NAPL
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for oil, alcohol, and surfactant 
+!     critical property and coefficient variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 22 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE NAPL
+      USE HYDT
+      USE GRID
+      USE GLB_PAR
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ALLOCATE( VISCO(1:4),STAT=ISTAT )
+      CHMSG = 'VISCO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SFCSF(1:6),STAT=ISTAT )
+      CHMSG = 'SFCSF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  End of ALLOC_NAPL group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_OUTPU
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for output control variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 12 August 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE SOLTN
+      USE OUTPU
+      USE GLB_PAR
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/ALLOC_OUTPU'
+      ALLOCATE( PRTM(1:LPTM),STAT=ISTAT )
+      CHMSG = 'PRTM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SF(1:2,1:LSF),STAT=ISTAT )
+      CHMSG = 'SF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CNVPLOT(1:LVPLOT),STAT=ISTAT )
+      CHMSG = 'CNVPLOT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CNVREF(1:LVREF),STAT=ISTAT )
+      CHMSG = 'CNVREF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CNVSF(1:2,1:LSF),STAT=ISTAT )
+      CHMSG = 'CNVSF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IPLOT(1:LVPLOT),STAT=ISTAT )
+      CHMSG = 'IPLOT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IREF(1:LVREF),STAT=ISTAT )
+      CHMSG = 'IREF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IPLOTGC(1:LVPLOT),STAT=ISTAT )
+      CHMSG = 'IPLOT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IREFGC(1:LVREF),STAT=ISTAT )
+      CHMSG = 'IREF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NDREF(1:LREF),STAT=ISTAT )
+      CHMSG = 'NDREF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NDREFL(1:LREF),STAT=ISTAT )
+      CHMSG = 'NDREFL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NDREFI(1:LREF),STAT=ISTAT )
+      CHMSG = 'NDREFI'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISFT(1:LSF),STAT=ISTAT )
+      CHMSG = 'ISFT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISFF(1:LSF),STAT=ISTAT )
+      CHMSG = 'ISFF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISFD(1:LSF),STAT=ISTAT )
+      CHMSG = 'ISFD'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISFGP(1:LSF),STAT=ISTAT )
+      CHMSG = 'ISFGP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UNPLOT(1:LVPLOT),STAT=ISTAT )
+      CHMSG = 'UNPLOT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UNREF(1:LVREF),STAT=ISTAT )
+      CHMSG = 'UNREF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CHREF(1:LVREF),STAT=ISTAT )
+      CHMSG = 'CHREF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISF(1:LSF),STAT=ISTAT )
+      CHMSG = 'ISF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IOFFSET_SF(1:LSF),STAT=ISTAT )
+      CHMSG = 'IOFFSET_SF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UNSF(1:2,1:LSF),STAT=ISTAT )
+      CHMSG = 'UNSF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CHSF(1:2,1:LSF),STAT=ISTAT )
+      CHMSG = 'CHSF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( FNSF(1:LSF),STAT=ISTAT )
+      CHMSG = 'FNSF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of ALLOC_OUTPU group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_PROP
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for property variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 26 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE PROP
+      USE GRID
+      USE GLB_PAR
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ALLOCATE( CPS(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'CPS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RHOS(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RHOS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PCMP(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PCMP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TCMP(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TCMP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CMP(1:4,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'CMP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( POR(1:6,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'POR'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TOR(1:6,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'TOR'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ITOR(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ITOR'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PERM(1:9,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'PERM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IPRF(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'IPRF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SCHR(1:LSCHR,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SCHR'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISCHR(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ISCHR'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISM(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ISM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RPGC(1:LRPGC,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RPGC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IRPG(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'IRPG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RPLC(1:LRPLC,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RPLC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IRPL(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'IRPL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RPNC(1:LRPLC,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'RPNC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IRPN(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'IRPN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( THKS(1:9,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'THKS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ITHK(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'ITHK'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IZ(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'IZ'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  End of ALLOC_PROP group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_SOLTN
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for solution control variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 26 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE SOLTN
+      USE GRID
+      USE GLB_PAR
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/ALLOC_SOLTN'
+      ALLOCATE( TMPS(1:LEPD),STAT=ISTAT )
+      CHMSG = 'TMPS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMPE(1:LEPD),STAT=ISTAT )
+      CHMSG = 'TMPE'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMPD(1:LEPD),STAT=ISTAT )
+      CHMSG = 'TMPD'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMPX(1:LEPD),STAT=ISTAT )
+      CHMSG = 'TMPX'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMPN(1:LEPD),STAT=ISTAT )
+      CHMSG = 'TMPN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMPA(1:LEPD),STAT=ISTAT )
+      CHMSG = 'TMPA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( TMPC(1:LEPD),STAT=ISTAT )
+      CHMSG = 'TMPC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RSDM(1:LEPD),STAT=ISTAT )
+      CHMSG = 'RSDM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( RSD(1:(LUK*(1+LWELL+LSPILL))),STAT=ISTAT )
+      CHMSG = 'RSD'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WFMN(1:20),STAT=ISTAT )
+      CHMSG = 'WFMN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IEQGC(1:LNGC),STAT=ISTAT )
+      CHMSG = 'IEQGC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ITOFF(1:LEPD),STAT=ISTAT )
+      CHMSG = 'ITOFF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NRIM(1:LEPD),STAT=ISTAT )
+      CHMSG = 'NRIM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NSD(1:(LUK*(1+LWELL+LSPILL))),STAT=ISTAT )
+      CHMSG = 'NSD'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HCNM(1:LNHC),STAT=ISTAT )
+      CHMSG = 'HCNM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( MNOD(1:LSFV),STAT=ISTAT )
+      CHMSG = 'MNOD'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( MADJ(1:LSFV),STAT=ISTAT )
+      CHMSG = 'MADJ'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( MFLX(1:LSFV),STAT=ISTAT )
+      CHMSG = 'MFLX'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( MPOS(1:LSFV),STAT=ISTAT )
+      CHMSG = 'MPOS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( MNEG(1:LSFV),STAT=ISTAT )
+      CHMSG = 'MNEG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( MPOSB(1:LSV),STAT=ISTAT )
+      CHMSG = 'MPOSB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( MNEGB(1:LSV),STAT=ISTAT )
+      CHMSG = 'MNEGB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of ALLOC_SOLTN group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_SOURC
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     HYDT-KE (Ternary Gas Hydrate w/ Kinetic Exchange) Mode
+!
+!     Allocate global array memory for source variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 22 June 2021
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE SOURC
+      USE GRID
+      USE GLB_PAR
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      LX = 8+LSOLU+LSPT+LNGC
+      LSRX = MAX( NSR(ID+1),1 )
+      ALLOCATE( SRC(1:LX,1:LSTM,1:LSR),STAT=ISTAT )
+      CHMSG = 'SRC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCT(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SRCT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCW(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SRCW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCA(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SRCA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCN(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SRCN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCO(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SRCO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCS(1:LSV,1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SRCS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCIT(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SRCIT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCIW(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SRCIW'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCIA(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SRCIA'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCIN(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SRCIN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCIO(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SRCIO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCIS(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'SRCIS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISRN(1:LSRX),STAT=ISTAT )
+      CHMSG = 'ISRN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISRM(1:LSRX),STAT=ISTAT )
+      CHMSG = 'ISRM'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISRIN(1:LSRX),STAT=ISTAT )
+      CHMSG = 'ISRIN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ISRT(1:LSRX),STAT=ISTAT )
+      CHMSG = 'ISRT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  End of ALLOC_SOURC group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE ALLOC_TRNSPT
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     CO2 (Carbon Sequestration in Deep Saline Aquifers) Mode
+!
+!     Allocate global array memory for solute transport variables
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by M.D. White, PNNL, 6 January 2022
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE MPI
+      USE SOLTN
+      USE GRID
+      USE GLB_PAR
+      USE TRNSPT
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      INTEGER	STATUS(MPI_STATUS_SIZE)	
+      INTEGER	(KIND=MPI_OFFSET_KIND) OFFSET
+      CHARACTER(32) :: CHMSG
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/ALLOC_TRNSPT'
+      ALLOCATE( C(1:NFCGC(ID+1),1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'C'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CO(1:NFCGC(ID+1),1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'CO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CNL(1:NFCGC(ID+1),1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'CNL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CB(1:LBCC,1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'CB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CBO(1:LBCC,1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'CBO'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YL(1:NFCGC(ID+1),1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'YL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YG(1:NFCGC(ID+1),1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'YG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YN(1:NFCGC(ID+1),1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'YN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YLB(1:LBCC,1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'YLB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YGB(1:LBCC,1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'YGB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( YNB(1:LBCC,1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'YNB'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PCSL(1:5,1:NFCGC(ID+1),1:LSOLU),STAT=ISTAT )
+      CHMSG = 'PCSL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( PCGL(1:5,1:LSOLU),STAT=ISTAT )
+      CHMSG = 'PCGL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CRNTG(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'CRNTG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CRNTL(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'CRNTL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CRNTN(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'CRNTN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( UC(1:2,1:NFCGC(ID+1),1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'UC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( VC(1:2,1:NFCGC(ID+1),1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'VC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( WC(1:2,1:NFCGC(ID+1),1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'WC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DISPL(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DISPL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( DISPT(1:NFCGC(ID+1)),STAT=ISTAT )
+      CHMSG = 'DISPT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SDCL(1:3,1:NFCGC(ID+1),1:LSOLU),STAT=ISTAT )
+      CHMSG = 'SDCL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SMDG(1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'SMDG'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SMDL(1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'SMDL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SOLUT(1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'SOLUT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CCL_CRN(1:LSOLU),STAT=ISTAT )
+      CHMSG = 'CCL_CRN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( HLF(1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'HLF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( SRCIC(1:NFCGC(ID+1),1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'SRCIC'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( CHDF(1:LSOLU,1:LSOLU),STAT=ISTAT )
+      CHMSG = 'CHDF'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IEDL(1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'IEDL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( ICT(1:NFCGC(ID+1),1:LSOLU+LSPT),STAT=ISTAT )
+      CHMSG = 'ICT'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IPCGL(1:LSOLU),STAT=ISTAT )
+      CHMSG = 'IPCGL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IPCL(1:LSOLU),STAT=ISTAT )
+      CHMSG = 'IPCL'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( N_CRN(1:LSOLU+1),STAT=ISTAT )
+      CHMSG = 'N_CRN'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCDS(1:LCDC+LSOLU),STAT=ISTAT )
+      CHMSG = 'IBCDS'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( NBCDP(1:LCDC),STAT=ISTAT )
+      CHMSG = 'NBCDP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+      ALLOCATE( IBCDP(1:LCDS,1:LCDP,1:LCDC),STAT=ISTAT )
+      CHMSG = 'IBCDP'
+      CALL ALLOC_ERROR( CHMSG,ISTAT )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of ALLOC_TRNSPT group  ---
+!
+      RETURN
+      END
+
+

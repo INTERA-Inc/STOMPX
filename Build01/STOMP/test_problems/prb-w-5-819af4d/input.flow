@@ -1,0 +1,68 @@
+~Simulation Title Card
+3.2,
+STOMP Example Problem W-5 Flow,
+M.D. White,
+Pacific Northwest Laboratory,
+13 September 2005,
+16:06 AM PDT,
+2,
+PHREEQC Example 15
+1D transport: kinetic biodegradation, cell growth, and sorption
+
+~Solution Control Card
+Normal,
+STOMP-W,
+1,
+0,yr,75,hr,0.1,hr,0.1,hr,1.25,8,1.e-06,
+1000,
+0,
+
+~Grid Card
+Uniform Cartesian,
+10,1,1,
+1,m,
+0.05,m,
+0.05,m,
+
+~Rock/Soil Zonation Card
+1,
+Column,1,10,1,1,1,1,
+
+~Mechanical Properties Card
+Column,2.5,g/cm^3,0.4,0.4,1.e-5,1/m,Millington and Quirk,
+
+~Hydraulic Properties Card
+Column,100.0,Darcy,100.0,Darcy,100.0,Darcy,
+
+~Saturation Function Card
+Column,van Genuchten,6.83,1/m,2.08,0.1213,,
+ 
+~Aqueous Relative Permeability Card
+Column,Mualem,,
+ 
+~Initial Conditions Card
+Aqueous Pressure,Gas Pressure,
+2,
+Aqueous Pressure,102064.81,Pa,,,,,,,1,10,1,1,1,1,
+Gas Pressure,102064.81,Pa,,,,,,,1,10,1,1,1,1,
+
+~Boundary Conditions Card
+2,
+West,Aqueous Neumann,
+1,1,1,1,1,1,1,
+0,hr,0.4,m/hr,
+East,Aqueous Dirichlet,
+10,10,1,1,1,1,1,
+0,day,102064.81,Pa,
+
+~Output Options Card
+3,
+1,1,1,
+5,1,1,
+10,1,1,
+1,1,hr,m,6,6,6,
+1,
+Aqueous pressure,Pa,
+0,
+0,
+

@@ -1,0 +1,9713 @@
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_BC( PGX,PLX,PNX,PPELX,PPEUX,PSBX,
+     &  PSOX,PVAX,PVNX,PVOX,PVWX,RHOGX,RHONX,RKGX,RKLX,RKNX,
+     &  SGX,SHX,SIX,SLX,SNX,TX,TCRX,TCTX,WSGWX,WSLCX,
+     &  XGAX,XGNX,XGOX,XGWX,XNAX,XNNX,XNOX,XNWX,XMLAX,XMLNX,XMLOX,
+     &  XLSX,YLSX,YMGAX,YMGNX,YMGOX,YMNAX,YMNNX,YMNOX,
+     &  ZMCAX,ZMCOX,ZMCNX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for flow boundary conditions
+!
+!     Input variables:
+!
+!     TX - temperature, C
+!     PSOX - pressure, Pa (absolute)
+!     SLX - aqueous saturation
+!     ZMCAX - total nonaqueous CO2 mole fraction
+!     ZMCOX - total nonaqueous CH4 mole fraction
+!     ZMCNX - total nonaqueous N2 mole fraction
+!     WSGWX - relative saturation of water vapor in gas
+!     WSLCX - relative saturation of nonaqueous components in aqueous
+!     IZN - rock/soil zonation number
+!     N - node number
+!
+!     Output variables:
+!
+!     PGX - gas pressure, guage Pa
+!     PLX - aqueous pressure, guage Pa
+!     PNX - nonaqueous liquid pressure, guage Pa
+!     PSBX - saturated brine vapor pressure, absolute Pa
+!     PVAX - mobile CO2 vapor pressure, absolute Pa
+!     PVOX - mobile CH4 vapor pressure, absolute Pa
+!     PVNX - mobile N2 vapor pressure, absolute Pa
+!     PVWX - water vapor pressure, absolute Pa
+!     RKGX - gas relative permeability
+!     RKLX - aqueous relative permeability tensor
+!     RKNX - nonaqueous liquid relative permeability
+!     SGX - gas saturation
+!     SLX - aqueous saturation
+!     SNX - nonaqueous liquid saturation
+!     XLSX - dissolved salt aqueous mass fraction
+!     YLSX - total salt aqueous mass fraction
+!     YMGAX - CO2 mole fraction of mobile formers
+!     YMGOX - CH4 mole fraction of mobile formers
+!     ZMCAX - CO2 mole fraction of nonaqueous components
+!     ZMCNX - N2 mole fraction of nonaqueous components
+!     ZMCOX - CH4 mole fraction of nonaqueous components
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 22 November 2013.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE PORMED
+      USE NAPL
+      USE HYST
+      USE GRID
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RKLX(3)
+      REAL*8 YMGX(LHF_HT),YMNX(LHF_HT),ZMCX(LHF_HT)
+      REAL*8 AIX(LHF_HT)
+      REAL*8 FUGLX(LHF_HT),FUGX(LHF_HT)
+      REAL*8 FKX(LHF_HT),FKLX(LHF_HT),FKUX(LHF_HT)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_BC'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PX = PSOX + PATM
+!
+!---  Assign aqueous CO2, CH4, and N2 mole fraction of formers,
+!     nonaqueous liquid saturation, and gas saturation  ---
+!
+      ZMCX(1) = MIN( MAX( ZMCAX,0.D+0 ),1.D+0 )
+      ZMCX(2) = MIN( MAX( ZMCOX,0.D+0 ),1.D+0 )
+      ZMCX(3) = MIN( MAX( ZMCNX,0.D+0 ),1.D+0 )
+!
+!---  Peng-Robinson temperature dependent component 
+!     coefficients  ---
+!
+      CALL PRC_T( AIX,TKX )
+!
+!---  Brine salt mass fraction  ---
+!      
+      CALL SOL_LS( TX,XLSMX )
+      XLSX = MIN( YLSX,XLSMX )
+!
+!---  Interfacial surface tensions  ---
+!
+      SIG_GL = SCHR(5,IZN)
+      SIG_NL = SCHR(6,IZN)
+      SIG_GN = SCHR(7,IZN)
+      SIG_HL = SCHR(9,IZN)
+      SIG_IL = SCHR(9,IZN)
+      IF( ISLC(7).EQ.2 .OR. ISLC(7).EQ.3 )
+     &  CALL SFT_L( TX,XLSX,SIG_GL )
+      CA_NL = ((SIG_NL**2) - (SIG_GN**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_NL)
+      CA_GN = ((SIG_GN**2) - (SIG_NL**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_GN)
+!
+!---  Interphase scaling factors  ---
+!
+      BGL = SCHR(8,IZN)/SIG_GL
+      BNL = SCHR(8,IZN)/(SIG_NL*CA_NL)
+      BGN = SCHR(8,IZN)/(SIG_GN*CA_GN)
+      BHL = SCHR(8,IZN)/SIG_HL
+      BIL = SCHR(8,IZN)/SIG_HL
+!
+!---  Entry pressure without hydrate barrier adjustment  ---
+!
+      ENPR = SCHR(2,IZN)*RHORL*GRAV
+!
+!---  Vapor pressure  ---
+!
+      CALL SP_B( TX,XLSX,PSBX )
+      PVWX = PSBX*WSGWX
+      PVX = PX - PVWX
+!
+!---  Water vapor molar density, kmol/m^3 ---
+!
+      ISRX = 2
+      CALL DENS_W( TX,PVWX,RHOX,RHOGWX,ISRX )
+      RHOMGWX = RHOGWX/WTMW
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = ZMCX(1)
+        YMGX(2) = ZMCX(2)
+        YMGX(3) = ZMCX(3)
+!
+!---    Liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)
+        YMNX(2) = ZMCX(2)
+        YMNX(3) = ZMCX(3)
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Phase saturations, capillary pressures, and phase pressures  ---
+!
+        SGX = 1.D+0-SLX-SHX-SIX
+        IF( SGX.LT.EPSL ) SGX = 0.D+0
+        SNX = 0.D+0
+        SLIX = SLX + SIX
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PVX*YMGAX
+        PVOX = PVX*YMGOX
+        PVNX = PVX*YMGNX
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Set nonaqueous-liquid to gas conditions ---
+!
+        RHOMNX = RHOMGX
+        XMNAX = XMGAX
+        XMNOX = XMGOX
+        XMNNX = XMGNX
+        XMNWX = XMGWX
+        WTMNX = WTMGX
+        XNAX = XGAX
+        XNOX = XGOX
+        XNNX = XGNX
+        XNWX = XGWX
+        RHONX = RHOGX
+!
+!---  Nonaqueous-liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+!
+!---    Liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)
+        YMNX(2) = ZMCX(2)
+        YMNX(3) = ZMCX(3)
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = FKX(1)*ZMCX(1)
+        YMGX(2) = FKX(2)*ZMCX(2)
+        YMGX(3) = FKX(3)*ZMCX(3)
+        SYMGX = YMGX(1)+YMGX(2)+YMGX(3)
+        YMGX(1) = YMGX(1)/SYMGX        
+        YMGX(2) = YMGX(2)/SYMGX        
+        YMGX(3) = YMGX(3)/SYMGX        
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PPEUX*YMGAX
+        PVOX = PPEUX*YMGOX
+        PVNX = PPEUX*YMGNX
+!
+!---    Phase saturations, capillary pressures, and phase pressures  ---
+!
+        SNX = 1.D+0-SLX-SHX-SIX
+        IF( SNX.LT.EPSL ) SNX = 0.D+0
+        SGX = 0.D+0
+        SLIX = SLX + SIX
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PVX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PPEUX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PPEUX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---  Nonaqueous two-phase  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        YMNX(1) = ZMCX(1)/FKLX(1)
+        YMNX(2) = ZMCX(2)/FKLX(2)
+        YMNX(3) = ZMCX(3)/FKLX(3)
+        SYMNX = YMNX(1)+YMNX(2)+YMNX(3)
+        YMNX(1) = YMNX(1)/SYMNX
+        YMNX(2) = YMNX(2)/SYMNX
+        YMNX(3) = YMNX(3)/SYMNX
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized gas mole fractions at the upper pressure
+!       envelope  ---
+!
+        YMGX(1) = ZMCX(1)*FKUX(1)
+        YMGX(2) = ZMCX(2)*FKUX(2)
+        YMGX(3) = ZMCX(3)*FKUX(3)
+        SYMGX = YMGX(1)+YMGX(2)+YMGX(3)
+        YMGX(1) = YMGX(1)/SYMGX
+        YMGX(2) = YMGX(2)/SYMGX
+        YMGX(3) = YMGX(3)/SYMGX
+!
+!---    Beta within the two-phase envelope  ---
+!
+        CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCX )
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = BTX*ZMCX(1) + (1.D+0-BTX)*YMGX(1)
+        YMGX(2) = BTX*ZMCX(2) + (1.D+0-BTX)*YMGX(2)
+        YMGX(3) = BTX*ZMCX(3) + (1.D+0-BTX)*YMGX(3)
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PVX*YMGAX
+        PVOX = PVX*YMGOX
+        PVNX = PVX*YMGNX
+!
+!---    Liquid mole fractions ---
+!
+        YMNX(1) = BTX*YMNX(1) + (1.D+0-BTX)*ZMCX(1)
+        YMNX(2) = BTX*YMNX(2) + (1.D+0-BTX)*ZMCX(2)
+        YMNX(3) = BTX*YMNX(3) + (1.D+0-BTX)*ZMCX(3)
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PVX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Nonaqueous-liquid density, kg/m^3 ---
+!
+        RHONX = RHOMNX*WTMNX
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Volume fraction of gas  ---
+!
+        SGNX = 1.D+0-SHX-SIX-SLX
+        IF( SGNX.LT.EPSL ) SGNX = 0.D+0
+        STX = (BTX/RHOMGCX)/((BTX/RHOMGCX) + ((1.D+0-BTX)/RHOMNCX))
+        SGX = STX*SGNX
+        SNX = (1.D+0-STX)*SGNX
+        SLIX = SLX + SIX
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---  Upper-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.3 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = ZMCX(1)
+        YMGX(2) = ZMCX(2)
+        YMGX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)/FKUX(1)
+        YMNX(2) = ZMCX(2)/FKUX(2)
+        YMNX(3) = ZMCX(3)/FKUX(3)
+        SYMNX = YMNX(1)+YMNX(2)+YMNX(3)
+        YMNX(1) = YMNX(1)/SYMNX
+        YMNX(2) = YMNX(2)/SYMNX
+        YMNX(3) = YMNX(3)/SYMNX
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PVX*YMGAX
+        PVOX = PVX*YMGOX
+        PVNX = PVX*YMGNX
+!
+!---    Phase saturations, capillary pressures, and phase pressures  ---
+!
+        SGX = 1.D+0-SLX-SHX-SIX
+        IF( SGX.LT.EPSL ) SGX = 0.D+0
+        SNX = 0.D+0
+        SLIX = SLX + SIX
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PPEUX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PPEUX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Nonaqueous-liquid density, kg/m^3 ---
+!
+        RHONX = RHOMNX*WTMNX
+!
+!---  Lower-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.4 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = ZMCX(1)
+        YMGX(2) = ZMCX(2)
+        YMGX(3) = ZMCX(3)
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)/FKLX(1)
+        YMNX(2) = ZMCX(2)/FKLX(2)
+        YMNX(3) = ZMCX(3)/FKLX(3)
+        SYMNX = YMNX(1)+YMNX(2)+YMNX(3)
+        YMNX(1) = YMNX(1)/SYMNX
+        YMNX(2) = YMNX(2)/SYMNX
+        YMNX(3) = YMNX(3)/SYMNX
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PVX*YMGAX
+        PVOX = PVX*YMGOX
+        PVNX = PVX*YMGNX
+!
+!---    Phase saturations, capillary pressures, and phase pressures  ---
+!
+        SGX = 1.D+0-SLX-SHX-SIX
+        IF( SGX.LT.EPSL ) SGX = 0.D+0
+        SNX = 0.D+0
+        SLIX = SLX + SIX
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PPELX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PPELX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Nonaqueous-liquid density, kg/m^3 ---
+!
+        RHONX = RHOMNX*WTMNX
+      ENDIF
+!
+!---  CO2 solubility ---
+!
+      FUGAX = FUGX(1)*PVAX
+      CALL SOL_LA( TX,FUGAX,XLSX,XMLAX )
+      XMLAX = XMLAX*WSLCX
+!
+!---  CH4 solubility ---
+!
+      FUGOX = FUGX(2)*PVOX
+      CALL SOL_LO( TX,FUGOX,XLSX,XMLOX )
+      XMLOX = XMLOX*WSLCX
+!
+!---  N2 solubility ---
+!
+      FUGNX = FUGX(3)*PVNX
+      CALL SOL_LN( TX,FUGNX,XLSX,XMLNX )
+      XMLNX = XMLNX*WSLCX
+!
+!---  Gas relative permeability  ---
+!
+      CALL RKG_HYDT_KE( RKGX,SGX,SHX,SLX,SNX,IZN )
+!
+!---  Aqueous relative permeability  ---
+!
+      CALL RKL_HYDT_KE( RKLX,SGX,SHX,SLX,SNX,IZN )
+!
+!---  Nonaqueous-liquid relative permeability  ---
+!
+      CALL RKN_HYDT_KE( RKNX,SGX,SHX,SLX,SNX,IZN )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_BC group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_IC1( PEQHX,PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,PSOX,
+     &  PVAX,PVHAX,PVNX,PVHNX,PVOX,PVHOX,PVWX,RHOHX,
+     &  SHX,SIX,SGX,SLX,SNX,TX,TCRX,TCTX,TEQHX,
+     &  XHAX,XHNX,XHOX,XHWX,XLSX,YLSX,YMGAX,YMGNX,YMGOX,YMHGAX,YMHGNX,
+     &  YMHGOX,ZMCAX,ZMCNX,ZMCOX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for initial condition #1
+!
+!     SHX = 0.0
+!     SNX = 0.0
+!     SGX = 0.0
+!     SLX = 1.0
+!
+!     Input variables:
+!
+!     TX - temperature, C
+!     PX - pressure, Pa (absolute)
+!     YMMX(1) - mobile CO2 mole fraction of formers (input as PVAX )
+!     YMMX(2) - mobile CH4 mole fraction of formers (input as PVOX )
+!     YMMX(3) - mobile N2 mole fraction of formers (input as PVNX )
+!     or
+!     ZMCX(1) - total nonaqueous CO2 mole fraction (input as PVAX )
+!     ZMCX(2) - total nonaqueous CH4 mole fraction (input as PVOX )
+!     ZMCX(3) - total nonaqueous N2 mole fraction (input as PVNX )
+!     WLFX - relative saturation of dissolved hydrate 
+!             formers (input as XMLO )
+!     IZN - rock/soil zonation number
+!     N - node number
+!
+!     Output variables:
+!
+!     PGX - gas pressure, guage Pa
+!     PIX - ice pressure, guage Pa
+!     PNX - nonaqueous liquid pressure, guage Pa
+!     PSBX - saturated brine vapor pressure, absolute Pa
+!     PVAX - mobile CO2 vapor pressure, absolute Pa
+!     PVHAX - hydrate CO2 vapor pressure, absolute Pa
+!     PVOX - mobile CH4 vapor pressure, absolute Pa
+!     PVHOX - hydrate CH4 vapor pressure, absolute Pa
+!     PVNX - mobile N2 vapor pressure, absolute Pa
+!     PVHNX - hydrate N2 vapor pressure, absolute Pa
+!     PVWX - water vapor pressure, absolute Pa
+!     RHOHX - hydrate density, kg/m^3
+!     RKGX - gas relative permeability
+!     RKLX - aqueous relative permeability tensor
+!     RKNX - nonaqueous liquid relative permeability
+!     SHX - hydrate saturation
+!     SIX - ice saturation
+!     SGX - gas saturation
+!     SLX - aqueous saturation
+!     SNX - nonaqueous liquid saturation
+!     TEQHX - hydrate equilibrium temperature, K
+!     TMHAX - total CO2 hydrate mass, kg
+!     TMHNX - total N2 hydrate mass, kg
+!     TMHOX - total CH4 hydrate mass, kg
+!     XHAX - CO2 hydrate mass fraction
+!     XHNX - N2 hydrate mass fraction
+!     XNOX - CH4 hydrate mass fraction
+!     XNWX - water hydrate mass fraction
+!     XLSX - dissolved salt aqueous mass fraction
+!     YLSX - total salt aqueous mass fraction
+!     YMGAX - CO2 mole fraction of mobile formers
+!     YMHGAX - CO2 mole fraction of hydrate formers
+!     YMGOX - CH4 mole fraction of mobile formers
+!     YMHGOX - CH4 mole fraction of hydrate formers
+!     ZMCAX - CO2 mole fraction of nonaqueous components
+!     ZMCNX - N2 mole fraction of nonaqueous components
+!     ZMCOX - CH4 mole fraction of nonaqueous components
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 18 August 2010.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE PORMED
+      USE HYST
+      USE HYDT
+      USE GRID
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 AIX(LHF_HT),ZMCX(LHF_HT),ZMCY(LHF_HT),DZMCX(LHF_HT)
+      REAL*8 XMGX(LHF_HT),XMGY(LHF_HT),DXMGX(LHF_HT)
+      REAL*8 XMNX(LHF_HT),XMLX(LHF_HT),YMMX(LHF_HT)
+      REAL*8 YMHGX(LHF_HT)
+      REAL*8 FUGLX(LHF_HT),FUGX(LHF_HT)
+      REAL*8 FKX(LHF_HT),FKLX(LHF_HT),FKUX(LHF_HT)
+      REAL*8 AJ(2,2),BJ(2),GX(2,3)
+      INTEGER IJ(2),NX(3)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_IC1'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PX = PSOX + PATM
+      PLX = PSOX
+      PGX = PSOX
+      PNX = PSOX
+!
+!---  Assign aqueous CO2, CH4, and N2 mole fraction of formers and
+!     aqueous relative saturation of formers  ---
+!
+      YMMX(1) = MIN( MAX( PVAX,0.D+0 ),1.D+0 )
+      YMMX(2) = MIN( MAX( PVOX,0.D+0 ),1.D+0 )
+      YMMX(3) = MIN( MAX( PVNX,0.D+0 ),1.D+0 )
+      WLFX = MIN( MAX( PVWX,0.D+0 ),1.D+0 )
+!
+!---  Peng-Robinson temperature dependent component 
+!     coefficients  ---
+!
+      CALL PRC_T( AIX,TKX )
+!
+!---  Brine salt mass fraction  ---
+!      
+      CALL SOL_LS( TX,XLSMX )
+      XLSX = MIN( YLSX,XLSMX )
+!
+!---  Interfacial surface tensions  ---
+!
+      SIG_GL = SCHR(5,IZN)
+      SIG_NL = SCHR(6,IZN)
+      SIG_GN = SCHR(7,IZN)
+      SIG_HL = SCHR(9,IZN)
+      SIG_IL = SCHR(9,IZN)
+      IF( ISLC(7).EQ.2 .OR. ISLC(7).EQ.3 )
+     &  CALL SFT_L( TX,XLSX,SIG_GL )
+      CA_NL = ((SIG_NL**2) - (SIG_GN**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_NL)
+      CA_GN = ((SIG_GN**2) - (SIG_NL**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_GN)
+!
+!---  Interphase scaling factors  ---
+!
+      BGL = SCHR(8,IZN)/SIG_GL
+      BNL = SCHR(8,IZN)/(SIG_NL*CA_NL)
+      BGN = SCHR(8,IZN)/(SIG_GN*CA_GN)
+      BHL = SCHR(8,IZN)/SIG_HL
+      BIL = SCHR(8,IZN)/SIG_HL
+!
+!---  Entry pressure without hydrate barrier adjustment  ---
+!
+      ENPR = SCHR(2,IZN)*RHORL*GRAV
+!
+!---  Ice pressure  ---
+!
+      CALL ICE( TX,PLX,XLSX,TFPX,PIX )
+!
+!---  Ice saturation  ---
+!
+      CALL SP_HYDT_KE( PIX,PLX,PNX,SHX,SIX,SLX,IZN,N )
+!
+!---  Nonaqueous saturations  ---
+!
+      SGX = 0.D+0
+      SNX = 0.D+0
+      SLIX = SLX + SIX
+      CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+      PGX = PLX + CPGLX
+      PNX = PLX + CPNLX
+!
+!---  Saturated water vapor pressure and brine density  ---
+!
+      CALL SP_B( TX,XLSX,PSBX )
+      PPLX = MAX( PX,PSBX )
+      CALL DENS_B( TX,PPLX,XLSX,RHOBX )
+!!
+!!---  Skip Newton-Raphson loop for aqueous relative saturation
+!!     equal to 0.0  ---
+!!
+!      IF( WLFX/EPSL.LT.EPSL ) THEN
+!        DO 10 NF = 1,3
+!          XMLX(NF) = 0.D+0
+!          XMGX(NF) = 0.D+0
+!          XMNX(NF) = 0.D+0
+!          ZMCX(NF) = 0.D+0
+!   10   CONTINUE
+!        GOTO 300
+!      ENDIF
+!
+!---  Guess mole fraction of CO2, CH4, and N2 in the gas/nonaqueous
+!     liquid ---
+!
+      PVX = PVWX*(PX-PSBX)
+      PVAX = PVX*PVAX
+      PVOX = PVX*PVOX
+      PVNX = PVX*PVNX
+      CALL SOL_LA( TX,PVAX,XLSX,XMLAX )
+      CALL SOL_LO( TX,PVOX,XLSX,XMLOX )
+      CALL SOL_LN( TX,PVNX,XLSX,XMLNX )
+      XMGX(1) = YMMX(1)/(XMLAX+SMALL)
+      XMGX(2) = YMMX(2)/(XMLOX+SMALL)
+      XMGX(3) = YMMX(3)/(XMLNX+SMALL)
+      SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+      XMGX(1) = XMGX(1)/SXMGX
+      XMGX(2) = XMGX(2)/SXMGX
+      XMGX(3) = XMGX(3)/SXMGX
+!
+!---  Two-variable Newton-Raphson loop: 
+!     gas mole fractions  ---
+!
+      NC = 0
+  110 CONTINUE
+      NC = NC + 1
+      IF( NC.GT.32 ) THEN
+        INDX = 17
+        CHMSG = 'Unconverged FLH_IC1: Gas Mole Fraction of Components'
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Primary variable switching scheme, selecting the components
+!     with the lowest concentrations  ---
+!
+      IF( XMGX(3).GE.MAX( XMGX(1),XMGX(2) ) ) THEN
+        NX(1) = 1
+        NX(2) = 2
+        NX(3) = 3
+      ELSEIF( XMGX(1).GE.MAX( XMGX(2),XMGX(3) ) ) THEN
+        NX(1) = 2
+        NX(2) = 3
+        NX(3) = 1
+      ELSE
+        NX(1) = 3
+        NX(2) = 1
+        NX(3) = 2
+      ENDIF
+      DO 130 M = 1,3
+        DO 120 NF = 1,2
+          XMGY(NX(NF)) = XMGX(NX(NF))
+          DXMGX(NF) = SIGN( 1.D-6,5.D-1-XMGX(NX(NF)) )
+  120   CONTINUE
+        IF( M.EQ.2 ) XMGY(NX(1)) = XMGX(NX(1)) + DXMGX(1)
+        IF( M.EQ.3 ) XMGY(NX(2)) = XMGX(NX(2)) + DXMGX(2)
+        XMGY(NX(3)) = MIN( MAX( 1.D+0-XMGY(NX(1))-XMGY(NX(2)),0.D+0 ),
+     &    1.D+0 )
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,XMGY )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,XMGY,ZGX )
+!
+!---    CO2 solubility ---
+!
+        FUGAX = FUGX(1)*PVX*XMGY(1)
+        CALL SOL_LA( TX,FUGAX,XLSX,XMLX(1) )
+!
+!---    CH4 solubility ---
+!
+        FUGOX = FUGX(2)*PVX*XMGY(2)
+        CALL SOL_LO( TX,FUGOX,XLSX,XMLX(2) )
+!
+!---    N2 solubility ---
+!
+        FUGNX = FUGX(3)*PVX*XMGY(3)
+        CALL SOL_LN( TX,FUGNX,XLSX,XMLX(3) )
+!
+!---    Residual equations ---
+!
+        SXMLX = XMLX(1)+XMLX(2)+XMLX(3)
+        GX(1,M) = YMMX(NX(1)) - XMLX(NX(1))/(SXMLX+SMALL)
+        GX(2,M) = YMMX(NX(2)) - XMLX(NX(2))/(SXMLX+SMALL)
+  130 CONTINUE
+!
+!---  Load solution vector and Jacobian matrix for
+!     two-phase conditions  ---
+!
+      DO 140 M = 1,2
+        AJ(M,1) = (GX(M,2)-GX(M,1))/DXMGX(1)
+        AJ(M,2) = (GX(M,3)-GX(M,1))/DXMGX(2)
+        BJ(M) = -GX(M,1)
+ 140  CONTINUE
+!
+!---  Solve linear system  ---
+!
+      JP = 2
+      KP = 2
+      CALL LUDCMP( AJ,JP,KP,IJ,DJ )
+      CALL LUBKSB( AJ,JP,KP,IJ,BJ )
+!
+!---  Update primary unknowns  ---
+!
+      DO 150 NF = 1,2
+        DXMGX(NF) = SIGN( MIN( 5.D-2,ABS(BJ(NF)) ),BJ(NF) )
+        IF( YMMX(NX(NF))/EPSL.LT.EPSL ) THEN
+          XMGX(NX(NF)) = 0.D+0
+          DXMGX(NF) = 0.D+0
+        ELSEIF( XMGX(NX(NF))/EPSL.LT.EPSL 
+     &    .AND. DXMGX(NF).LT.0.D+0 ) THEN
+          XMGX(NX(NF)) = 0.D+0
+          DXMGX(NF) = 0.D+0
+        ELSE
+          XMGX(NX(NF)) = XMGX(NX(NF)) + DXMGX(NF)
+          XMGX(NX(NF)) = MAX( MIN( XMGX(NX(NF)),1.D+0 ),0.D+0 )
+        ENDIF
+  150 CONTINUE
+      SXMGX = XMGX(NX(1))+XMGX(NX(2))
+      IF( (SXMGX-1.D+0).GT.0.D+0 ) THEN
+        XMGX(NX(1)) = XMGX(NX(1))/SXMGX
+        XMGX(NX(2)) = XMGX(NX(2))/SXMGX
+      ENDIF
+      XMGX(NX(3)) = MIN( MAX( 1.D+0-XMGX(NX(1))-XMGX(NX(2)),0.D+0 ),
+     &  1.D+0 )
+!
+!---  Convergence check  ---
+!
+      IF( ABS(DXMGX(1)).GT.1.D-9 ) GOTO 110
+      IF( ABS(DXMGX(2)).GT.1.D-9 ) GOTO 110
+!
+!---  Peng-Robinson gas mixture coefficients  ---
+!
+      CALL PRC_X( AGX,AIX,BGX,XMGX )
+!
+!---  Peng-Robinson gas compressibility ---
+!
+      INDX = 1
+      CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---  Peng-Robinson gas component fugacities ---
+!
+      CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,XMGX,ZGX )
+!
+!---  CO2 solubility ---
+!
+      FUGAX = FUGX(1)*PVX*XMGX(1)
+      CALL SOL_LA( TX,FUGAX,XLSX,XMLX(1) )
+!
+!---  CH4 solubility ---
+!
+      FUGOX = FUGX(2)*PVX*XMGX(2)
+      CALL SOL_LO( TX,FUGOX,XLSX,XMLX(2) )
+!
+!---  N2 solubility ---
+!
+      FUGNX = FUGX(3)*PVX*XMGX(3)
+      CALL SOL_LN( TX,FUGNX,XLSX,XMLX(3) )
+!
+!---  Use gas component concentrations as guesses to the 
+!     nonaqueous component concentrations  ---
+!
+      ZMCX(1) = XMGX(1)
+      ZMCX(2) = XMGX(2)
+      ZMCX(3) = XMGX(3)
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+        BTX = 1.D+0
+!
+!---  Nonaqueous liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+        BTX = 0.D+0
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Component mole fractions ---
+!
+        ZMCX(1) = XMGX(1)/FKX(1)
+        ZMCX(2) = XMGX(2)/FKX(2)
+        ZMCX(3) = XMGX(3)/FKX(3)
+        SZMCX = ZMCX(1)+ZMCX(2)+ZMCX(3)
+        ZMCX(1) = ZMCX(1)/SZMCX
+        ZMCX(2) = ZMCX(2)/SZMCX
+        ZMCX(3) = MIN( MAX( 1.D+0-ZMCX(1)-ZMCX(2),0.D+0 ),1.D+0 )
+!
+!---  Two-phase conditions  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+        BTX = 5.D-1
+!
+!---    Component mole fractions ---
+!
+        ZMCX(1) = XMGX(1)*(1.D+0+BTX*(FKX(1)-1.D+0))/FKX(1)
+        ZMCX(2) = XMGX(2)*(1.D+0+BTX*(FKX(2)-1.D+0))/FKX(2)
+        ZMCX(3) = XMGX(3)*(1.D+0+BTX*(FKX(3)-1.D+0))/FKX(3)
+        SZMCX = ZMCX(1)+ZMCX(2)+ZMCX(3)
+        ZMCX(1) = ZMCX(1)/SZMCX
+        ZMCX(2) = ZMCX(2)/SZMCX
+        ZMCX(3) = MIN( MAX( 1.D+0-ZMCX(1)-ZMCX(2),0.D+0 ),1.D+0 )
+!
+!---  Upper-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.3 ) THEN
+        BTX = 1.D+0
+!
+!---  Lower-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.4 ) THEN
+        BTX = 1.D+0
+      ENDIF
+      NC = 0
+  210 CONTINUE
+      NC = NC + 1
+      IF( NC.GT.32 ) THEN
+        INDX = 17
+        CHMSG = 'Unconverged FLH_IC1: Nonaqueous Mole Fraction of ' // 
+     &    'Components'
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Primary variable switching scheme, selecting the components
+!     with the lowest concentrations  ---
+!
+      IF( ZMCX(3).GE.MAX( ZMCX(1),ZMCX(2) ) ) THEN
+        NX(1) = 1
+        NX(2) = 2
+        NX(3) = 3
+      ELSEIF( ZMCX(1).GE.MAX( ZMCX(2),ZMCX(3) ) ) THEN
+        NX(1) = 2
+        NX(2) = 3
+        NX(3) = 1
+      ELSE
+        NX(1) = 3
+        NX(2) = 1
+        NX(3) = 2
+      ENDIF
+      DO 230 M = 1,3
+        DO 220 NF = 1,2
+          ZMCY(NX(NF)) = ZMCX(NX(NF))
+          DZMCX(NF) = SIGN( 1.D-6,5.D-1-ZMCX(NX(NF)) )
+  220   CONTINUE
+        IF( M.EQ.2 ) ZMCY(NX(1)) = ZMCX(NX(1)) + DZMCX(1)
+        IF( M.EQ.3 ) ZMCY(NX(2)) = ZMCX(NX(2)) + DZMCX(2)
+        ZMCY(NX(3)) = MIN( MAX( 1.D+0-ZMCY(NX(1))-ZMCY(NX(2)),0.D+0 ),
+     &    1.D+0 )
+!
+!---    Determine phase state of nonaqueous phases  ---
+!
+        CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCY,NP_HT )
+!
+!---    Nonaqueous gas phase  ---
+!
+        IF( NP_HT.EQ.0 ) THEN
+!
+!---      Gas mole fractions ---
+!
+          XMGY(NX(1)) = ZMCY(NX(1))
+          XMGY(NX(2)) = ZMCY(NX(2))
+          XMGY(NX(3)) = ZMCY(NX(3))
+!
+!---      Liquid mole fractions ---
+!
+          XMNX(NX(1)) = ZMCY(NX(1))
+          XMNX(NX(2)) = ZMCY(NX(2))
+          XMNX(NX(3)) = ZMCY(NX(3))
+!
+!---    Nonaqueous liquid phase  ---
+!
+        ELSEIF( NP_HT.EQ.1 ) THEN
+!
+!---      Liquid mole fractions ---
+!
+          XMNX(NX(1)) = ZMCY(NX(1))
+          XMNX(NX(2)) = ZMCY(NX(2))
+          XMNX(NX(3)) = ZMCY(NX(3))
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKUX )
+!
+!---      Gas mole fractions ---
+!
+          XMGY(NX(1)) = FKUX(NX(1))*ZMCY(NX(1))
+          XMGY(NX(2)) = FKUX(NX(2))*ZMCY(NX(2))
+          XMGY(NX(3)) = FKUX(NX(3))*ZMCY(NX(3))
+          SXMGY = XMGY(NX(1))+XMGY(NX(2))+XMGY(NX(3))
+          XMGY(NX(1)) = XMGY(NX(1))/SXMGY
+          XMGY(NX(2)) = XMGY(NX(2))/SXMGY
+          XMGY(NX(3)) = XMGY(NX(3))/SXMGY        
+!
+!---    Nonaqueous two-phase  ---
+!
+        ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---      K-factors at the lower pressure envelope  ---
+!
+          CALL KF_LPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---      Normalized liquid mole fractions at the lower pressure
+!         envelope  ---
+!
+          XMNX(NX(1)) = ZMCY(NX(1))/FKLX(NX(1))
+          XMNX(NX(2)) = ZMCY(NX(2))/FKLX(NX(2))
+          XMNX(NX(3)) = ZMCY(NX(3))/FKLX(NX(3))
+          SXMNX = XMNX(NX(1))+XMNX(NX(2))+XMNX(NX(3))
+          XMNX(NX(1)) = XMNX(NX(1))/SXMNX
+          XMNX(NX(2)) = XMNX(NX(2))/SXMNX
+          XMNX(NX(3)) = XMNX(NX(3))/SXMNX
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKUX )
+!
+!---      Normalized gas mole fractions at the upper pressure
+!         envelope  ---
+!
+          XMGY(NX(1)) = ZMCY(NX(1))*FKUX(NX(1))
+          XMGY(NX(2)) = ZMCY(NX(2))*FKUX(NX(2))
+          XMGY(NX(3)) = ZMCY(NX(3))*FKUX(NX(3))
+          SXMGX = XMGY(NX(1))+XMGY(NX(2))+XMGY(NX(3))
+          XMGY(NX(1)) = XMGY(NX(1))/SXMGX
+          XMGY(NX(2)) = XMGY(NX(2))/SXMGX
+          XMGY(NX(3)) = XMGY(NX(3))/SXMGX
+!
+!---      Beta within the two-phase envelope  ---
+!
+          CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCY )
+!
+!---      Gas mole fractions ---
+!
+          XMGY(NX(1)) = BTX*ZMCY(NX(1)) + (1.D+0-BTX)*XMGY(NX(1))
+          XMGY(NX(2)) = BTX*ZMCY(NX(2)) + (1.D+0-BTX)*XMGY(NX(2))
+          XMGY(NX(3)) = BTX*ZMCY(NX(3)) + (1.D+0-BTX)*XMGY(NX(3))
+!
+!---     Liquid mole fractions ---
+!
+          XMNX(NX(1)) = BTX*XMNX(NX(1)) + (1.D+0-BTX)*ZMCY(NX(1))
+          XMNX(NX(2)) = BTX*XMNX(NX(2)) + (1.D+0-BTX)*ZMCY(NX(2))
+          XMNX(NX(3)) = BTX*XMNX(NX(3)) + (1.D+0-BTX)*ZMCY(NX(3))
+!
+!---    Upper-phase-envelope-gas phase  ---
+!
+        ELSEIF( NP_HT.EQ.3 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGY(NX(1)) = ZMCY(NX(1))
+          XMGY(NX(2)) = ZMCY(NX(2))
+          XMGY(NX(3)) = ZMCY(NX(3))
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKUX )
+!
+!---      Normalized liquid mole fractions at the lower pressure
+!         envelope  ---
+!
+          XMNX(NX(1)) = ZMCY(NX(1))/FKUX(NX(1))
+          XMNX(NX(2)) = ZMCY(NX(2))/FKUX(NX(2))
+          XMNX(NX(3)) = ZMCY(NX(3))/FKUX(NX(3))
+          SXMNX = XMNX(NX(1))+XMNX(NX(2))+XMNX(NX(3))
+          XMNX(NX(1)) = XMNX(NX(1))/SXMNX
+          XMNX(NX(2)) = XMNX(NX(2))/SXMNX
+          XMNX(NX(3)) = XMNX(NX(3))/SXMNX
+!
+!---    Lower-phase-envelope-gas phase  ---
+!
+        ELSEIF( NP_HT.EQ.4 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGY(NX(1)) = ZMCY(NX(1))
+          XMGY(NX(2)) = ZMCY(NX(2))
+          XMGY(NX(3)) = ZMCY(NX(3))
+!
+!---      K-factors at the lower pressure envelope  ---
+!
+          CALL KF_LPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---      Normalized liquid mole fractions at the lower pressure
+!         envelope  ---
+!
+          XMNX(NX(1)) = ZMCY(NX(1))/FKLX(NX(1))
+          XMNX(NX(2)) = ZMCY(NX(2))/FKLX(NX(2))
+          XMNX(NX(3)) = ZMCY(NX(3))/FKLX(NX(3))
+          SXMNX = XMNX(NX(1))+XMNX(NX(2))+XMNX(NX(3))
+          XMNX(NX(1)) = XMNX(NX(1))/SXMNX
+          XMNX(NX(2)) = XMNX(NX(2))/SXMNX
+          XMNX(NX(3)) = XMNX(NX(3))/SXMNX
+        ENDIF
+!
+!---    Residual equations ---
+!
+        GX(1,M) = XMGX(NX(1)) - XMGY(NX(1))
+        GX(2,M) = XMGX(NX(2)) - XMGY(NX(2))
+  230 CONTINUE
+!
+!---  Load solution vector and Jacobian matrix for
+!     two-phase conditions  ---
+!
+      DO 240 M = 1,2
+        AJ(M,1) = (GX(M,2)-GX(M,1))/DZMCX(1)
+        AJ(M,2) = (GX(M,3)-GX(M,1))/DZMCX(2)
+        BJ(M) = -GX(M,1)
+ 240  CONTINUE
+!
+!---  Solve linear system  ---
+!
+      JP = 2
+      KP = 2
+      CALL LUDCMP( AJ,JP,KP,IJ,DJ )
+      CALL LUBKSB( AJ,JP,KP,IJ,BJ )
+!
+!---  Update primary unknowns  ---
+!
+      DO 250 NF = 1,2
+        DZMCX(NF) = SIGN( MIN( 5.D-2,ABS(BJ(NF)) ),BJ(NF) )
+        IF( XMGX(NX(NF))/EPSL.LT.EPSL ) THEN
+          ZMCX(NX(NF)) = 0.D+0
+          DZMCX(NF) = 0.D+0
+        ELSEIF( ZMCX(NX(NF))/EPSL.LT.EPSL 
+     &    .AND. DZMCX(NF).LT.0.D+0 ) THEN
+          ZMCX(NX(NF)) = 0.D+0
+          DZMCX(NF) = 0.D+0
+        ELSE
+          ZMCX(NX(NF)) = ZMCX(NX(NF)) + DZMCX(NF)
+          ZMCX(NX(NF)) = MAX( MIN( ZMCX(NX(NF)),1.D+0 ),0.D+0 )
+        ENDIF
+  250 CONTINUE
+      SZMCX = ZMCX(NX(1))+ZMCX(NX(2))
+      IF( (SZMCX-1.D+0).GT.0.D+0 ) THEN
+        ZMCX(NX(1)) = ZMCX(NX(1))/SZMCX
+        ZMCX(NX(2)) = ZMCX(NX(2))/SZMCX
+      ENDIF
+      ZMCX(NX(3)) = MIN( MAX( 1.D+0-ZMCX(NX(1))-ZMCX(NX(2)),0.D+0 ),
+     &  1.D+0 )
+!
+!---  Convergence check  ---
+!
+      IF( ABS(DZMCX(1)).GT.1.D-9 ) GOTO 210
+      IF( ABS(DZMCX(2)).GT.1.D-9 ) GOTO 210
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---  Nonaqueous liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = FKUX(1)*ZMCX(1)
+        XMGX(2) = FKUX(2)*ZMCX(2)
+        XMGX(3) = FKUX(3)*ZMCX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX        
+!
+!---  Nonaqueous two-phase  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKLX(1)
+        XMNX(2) = ZMCX(2)/FKLX(2)
+        XMNX(3) = ZMCX(3)/FKLX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized gas mole fractions at the upper pressure
+!       envelope  ---
+!
+        XMGX(1) = ZMCX(1)*FKUX(1)
+        XMGX(2) = ZMCX(2)*FKUX(2)
+        XMGX(3) = ZMCX(3)*FKUX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX
+!
+!---    Beta within the two-phase envelope  ---
+!
+        CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = BTX*ZMCX(1) + (1.D+0-BTX)*XMGX(1)
+        XMGX(2) = BTX*ZMCX(2) + (1.D+0-BTX)*XMGX(2)
+        XMGX(3) = BTX*ZMCX(3) + (1.D+0-BTX)*XMGX(3)
+!
+!---   Liquid mole fractions ---
+!
+        XMNX(1) = BTX*XMNX(1) + (1.D+0-BTX)*ZMCX(1)
+        XMNX(2) = BTX*XMNX(2) + (1.D+0-BTX)*ZMCX(2)
+        XMNX(3) = BTX*XMNX(3) + (1.D+0-BTX)*ZMCX(3)
+!
+!---  Upper-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.3 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)/FKUX(1)
+        XMNX(2) = ZMCX(2)/FKUX(2)
+        XMNX(3) = ZMCX(3)/FKUX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+!
+!---  Lower-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.4 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)/FKLX(1)
+        XMNX(2) = ZMCX(2)/FKLX(2)
+        XMNX(3) = ZMCX(3)/FKLX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+      ENDIF
+!
+!---  Converged aqueous concentrations and phantom nonaqueous
+!     phase equilibria  ---
+!
+!  300 CONTINUE
+!
+!---  Aqueous, gas, and nonaqueous liquid mole fractions  ---
+!
+      XMLAX = XMLX(1)
+      XMLOX = XMLX(2)
+      XMLNX = XMLX(3)
+      YMGAX = XMGX(1)
+      YMGOX = XMGX(2)
+      YMGNX = XMGX(3)
+      XMNAX = XMNX(1)
+      XMNOX = XMNX(2)
+      XMNNX = XMNX(3)
+      ZMCAX = ZMCX(1)
+      ZMCOX = ZMCX(2)
+      ZMCNX = ZMCX(3)
+!
+!---  Component vapor pressures  ---
+!
+      PVAX = PVX*YMGAX
+      PVOX = PVX*YMGOX
+      PVNX = PVX*YMGNX
+!
+!---  Hydrate properties for no-hydrate conditions  ---
+!
+      YMHGAX = 0.D+0
+      YMHGOX = 1.D+0
+      YMHGNX = 0.D+0
+      TEQHX = -TABS
+      XHAX = 0.D+0
+      XHOX = 0.D+0
+      XHNX = 0.D+0
+      XHWX = 1.D+0
+      RHOHX = 0.D+0
+      SHX = 0.D+0
+!
+!---  Hydrate equilibrium temperature at the vapor pressure conditions  ---
+!
+      PVHAX = PVAX
+      PVHOX = PVOX
+      PVHNX = PVNX
+      PVHX = PVHAX+PVHOX+PVHNX
+      IF( PVHX.GT.EPSL ) THEN
+        YMHGX(1) = PVHAX/PVHX
+        YMHGX(2) = PVHOX/PVHX
+        YMHGX(3) = PVHNX/PVHX
+        YMHGAX = YMHGX(1)
+        YMHGOX = YMHGX(2)
+        YMHGNX = YMHGX(3)
+!
+!---    Set interpretation concentrations to actuals  ---
+!
+        ZMIH_HT(1) = YMHGX(1)
+        ZMIH_HT(2) = YMHGX(2)
+        ZMIH_HT(3) = YMHGX(3)
+!
+!---    Hydrate equilibrium pressure as a function of temperature,
+!       vapor mole fractions, and inhibitor concentration  ---
+!
+        CALL HYD_P( TKX,YMHGX,XLSX,PEQHX )
+!
+!---    Hydrate composition at temperature,
+!       vapor mole fractions, and inhibitor concentration  ---
+!
+        IF( PVHX.GE.PEQHX ) THEN
+          CALL HYD_C( TKX,YMHGX,XLSX,RHOHX,XHAX,XHOX,
+     &      XHNX,XHWX,XMHAX,XMHOX,XMHNX,XMHWX )
+          PVHAX = YMHGX(1)*PVHX
+          PVHOX = YMHGX(2)*PVHX
+          PVHNX = YMHGX(3)*PVHX
+        ENDIF
+      ENDIF
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_IC1 group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_IC2( PEQHX,PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,
+     &  PSOX,PVAX,PVHAX,PVNX,PVHNX,PVOX,PVHOX,PVWX,RHOHX,
+     &  SHX,SIX,SGX,SLX,SNX,TX,TCRX,TCTX,TEQHX,
+     &  XHAX,XHNX,XHOX,XHWX,XLSX,YLSX,YMGAX,YMGNX,YMGOX,YMHGAX,YMHGNX,
+     &  YMHGOX,ZMCAX,ZMCNX,ZMCOX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for initial condition #2
+!
+!     SHX = 0.0
+!     SGX + SNX > 0.0
+!     SLX < 1.0
+!
+!     Input variables:
+!
+!     TX - temperature, C
+!     PX - pressure, Pa (absolute)
+!     SLX - aqueous saturation
+!     YMMX(1) - mobile CO2 mole fraction of formers (input as PVAX )
+!     YMMX(2) - mobile CH4 mole fraction of formers (input as PVOX )
+!     YMMX(3) - mobile N2 mole fraction of formers (input as PVNX )
+!     IZN - rock/soil zonation number
+!     N - node number
+!
+!     Output variables:
+!
+!     PGX - gas pressure, guage Pa
+!     PIX - ice pressure, guage Pa
+!     PNX - nonaqueous liquid pressure, guage Pa
+!     PSBX - saturated brine vapor pressure, absolute Pa
+!     PVAX - mobile CO2 vapor pressure, absolute Pa
+!     PVHAX - hydrate CO2 vapor pressure, absolute Pa
+!     PVOX - mobile CH4 vapor pressure, absolute Pa
+!     PVHOX - hydrate CH4 vapor pressure, absolute Pa
+!     PVNX - mobile N2 vapor pressure, absolute Pa
+!     PVHNX - hydrate N2 vapor pressure, absolute Pa
+!     PVWX - water vapor pressure, absolute Pa
+!     RHOHX - hydrate density, kg/m^3
+!     RKGX - gas relative permeability
+!     RKLX - aqueous relative permeability tensor
+!     RKNX - nonaqueous liquid relative permeability
+!     SHX - hydrate saturation
+!     SIX - ice saturation
+!     SGX - gas saturation
+!     SLX - aqueous saturation
+!     SNX - nonaqueous liquid saturation
+!     TEQHX - hydrate equilibrium temperature, K
+!     TMHAX - total CO2 hydrate mass, kg
+!     TMHNX - total N2 hydrate mass, kg
+!     TMHOX - total CH4 hydrate mass, kg
+!     XHAX - CO2 hydrate mass fraction
+!     XHNX - N2 hydrate mass fraction
+!     XNOX - CH4 hydrate mass fraction
+!     XNWX - water hydrate mass fraction
+!     XLSX - dissolved salt aqueous mass fraction
+!     YLSX - total salt aqueous mass fraction
+!     YMGAX - CO2 mole fraction of mobile formers
+!     YMHGAX - CO2 mole fraction of hydrate formers
+!     YMGOX - CH4 mole fraction of mobile formers
+!     YMHGOX - CH4 mole fraction of hydrate formers
+!     ZMCAX - CO2 mole fraction of nonaqueous components
+!     ZMCNX - N2 mole fraction of nonaqueous components
+!     ZMCOX - CH4 mole fraction of nonaqueous components
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 13 September 2012.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE PORMED
+      USE NAPL
+      USE HYST
+      USE HYDT
+      USE GRID
+      USE FDVP
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 AIX(LHF_HT),ZMCX(LHF_HT),ZMCY(LHF_HT),DZMCX(LHF_HT)
+      REAL*8 XMGX(LHF_HT)
+      REAL*8 XMNX(LHF_HT),XMLX(LHF_HT),YMMX(LHF_HT),YMMY(LHF_HT)
+      REAL*8 YMHGX(LHF_HT)
+      REAL*8 FUGLX(LHF_HT),FUGX(LHF_HT)
+      REAL*8 FKX(LHF_HT),FKLX(LHF_HT),FKUX(LHF_HT)
+      REAL*8 AJ(2,2),BJ(2),GX(2,3)
+      INTEGER IJ(2),NX(3)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_IC2'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PX = PSOX + PATM
+      PGX = PSOX
+!
+!---  Assign aqueous CO2, CH4, and N2 mole fraction of formers,
+!     nonaqueous liquid saturation, and gas saturation  ---
+!
+      YMMX(1) = MIN( MAX( PVAX,0.D+0 ),1.D+0 )
+      YMMX(2) = MIN( MAX( PVOX,0.D+0 ),1.D+0 )
+      YMMX(3) = MIN( MAX( PVNX,0.D+0 ),1.D+0 )
+!
+!---  Peng-Robinson temperature dependent component 
+!     coefficients  ---
+!
+      CALL PRC_T( AIX,TKX )
+!
+!---  Brine salt mass fraction  ---
+!      
+      CALL SOL_LS( TX,XLSMX )
+      XLSX = MIN( YLSX,XLSMX )
+!
+!---  Interfacial surface tensions  ---
+!
+      SIG_GL = SCHR(5,IZN)
+      SIG_NL = SCHR(6,IZN)
+      SIG_GN = SCHR(7,IZN)
+      SIG_HL = SCHR(9,IZN)
+      SIG_IL = SCHR(9,IZN)
+      IF( ISLC(7).EQ.2 .OR. ISLC(7).EQ.3 )
+     &  CALL SFT_L( TX,XLSX,SIG_GL )
+      CA_NL = ((SIG_NL**2) - (SIG_GN**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_NL)
+      CA_GN = ((SIG_GN**2) - (SIG_NL**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_GN)
+!
+!---  Interphase scaling factors  ---
+!
+      BGL = SCHR(8,IZN)/SIG_GL
+      BNL = SCHR(8,IZN)/(SIG_NL*CA_NL)
+      BGN = SCHR(8,IZN)/(SIG_GN*CA_GN)
+      BHL = SCHR(8,IZN)/SIG_HL
+      BIL = SCHR(8,IZN)/SIG_HL
+!
+!---  Entry pressure without hydrate barrier adjustment  ---
+!
+      ENPR = SCHR(2,IZN)*RHORL*GRAV
+!
+!---  Nonaqueous saturation  ---
+!
+      SHX = 0.D+0
+      SIX = 0.D+0
+      SGNX = 1.D+0 - SHX - SIX - SLX
+      IF( SGNX.LE.0.D+0 ) THEN
+        INDX = 11
+        RLMSGX = SGNX
+        CHMSG = 'FLH_IC2: Zero Nonaqueous Saturation: ' // 
+     &    'SG + SN = '
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Vapor pressure  ---
+!
+      CALL SP_B( TX,XLSX,PSBX )
+      CALL VPL( PSBX,PVWX,SLX,TX,IZN )
+      PVX = PX - PVWX
+!
+!---  Guess the nonaqueous component concentrations  ---
+!
+      ZMCX(1) = YMMX(1)
+      ZMCX(2) = YMMX(2)
+      ZMCX(3) = YMMX(3)
+!
+!---  Two-variable Newton-Raphson loop: gas mole fractions  ---
+!
+      NC = 0
+  110 CONTINUE
+      NC = NC + 1
+      IF( NC.GT.32 ) THEN
+        INDX = 17
+        CHMSG = 'FLH_IC2: Unconverged Nonaqueous Mole Fraction' // 
+     &    ' of Components'
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Primary variable switching scheme, selecting the components
+!     with the lowest concentrations  ---
+!
+      IF( ZMCX(3).GE.MAX( ZMCX(1),ZMCX(2) ) ) THEN
+        NX(1) = 1
+        NX(2) = 2
+        NX(3) = 3
+      ELSEIF( ZMCX(1).GE.MAX( ZMCX(2),ZMCX(3) ) ) THEN
+        NX(1) = 2
+        NX(2) = 3
+        NX(3) = 1
+      ELSE
+        NX(1) = 3
+        NX(2) = 1
+        NX(3) = 2
+      ENDIF
+      DO 130 M = 1,3
+        DO 120 NF = 1,2
+          ZMCY(NX(NF)) = ZMCX(NX(NF))
+          DZMCX(NF) = SIGN( 1.D-6,5.D-1-ZMCX(NX(NF)) )
+  120   CONTINUE
+        IF( M.EQ.2 ) ZMCY(NX(1)) = ZMCX(NX(1)) + DZMCX(1)
+        IF( M.EQ.3 ) ZMCY(NX(2)) = ZMCX(NX(2)) + DZMCX(2)
+        ZMCY(NX(3)) = MIN( MAX( 1.D+0-ZMCY(NX(1))-ZMCY(NX(2)),0.D+0 ),
+     &    1.D+0 )
+!
+!---    Determine phase state of nonaqueous phases  ---
+!
+        CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCY,NP_HT )
+!
+!---    Nonaqueous gas phase  ---
+!
+        IF( NP_HT.EQ.0 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGX(1) = ZMCY(1)
+          XMGX(2) = ZMCY(2)
+          XMGX(3) = ZMCY(3)
+!
+!---      Liquid mole fractions ---
+!
+          XMNX(1) = ZMCY(1)
+          XMNX(2) = ZMCY(2)
+          XMNX(3) = ZMCY(3)
+!
+!---    Nonaqueous liquid phase  ---
+!
+        ELSEIF( NP_HT.EQ.1 ) THEN
+          BTX = 0.D+0
+!
+!---      Liquid mole fractions ---
+!
+          XMNX(1) = ZMCY(1)
+          XMNX(2) = ZMCY(2)
+          XMNX(3) = ZMCY(3)
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKUX )
+!
+!---      Gas mole fractions ---
+!
+          XMGX(1) = FKUX(1)*ZMCY(1)
+          XMGX(2) = FKUX(2)*ZMCY(2)
+          XMGX(3) = FKUX(3)*ZMCY(3)
+          SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+          XMGX(1) = XMGX(1)/SXMGX
+          XMGX(2) = XMGX(2)/SXMGX
+          XMGX(3) = XMGX(3)/SXMGX        
+!
+!---    Nonaqueous two-phase  ---
+!
+        ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---      K-factors at the lower pressure envelope  ---
+!
+          CALL KF_LPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---      Normalized liquid mole fractions at the lower pressure
+!         envelope  ---
+!
+          XMNX(1) = ZMCY(1)/FKLX(1)
+          XMNX(2) = ZMCY(2)/FKLX(2)
+          XMNX(3) = ZMCY(3)/FKLX(3)
+          SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+          XMNX(1) = XMNX(1)/SXMNX
+          XMNX(2) = XMNX(2)/SXMNX
+          XMNX(3) = XMNX(3)/SXMNX
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKUX )
+!
+!---      Normalized gas mole fractions at the upper pressure
+!         envelope  ---
+!
+          XMGX(1) = ZMCY(1)*FKUX(1)
+          XMGX(2) = ZMCY(2)*FKUX(2)
+          XMGX(3) = ZMCY(3)*FKUX(3)
+          SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+          XMGX(1) = XMGX(1)/SXMGX
+          XMGX(2) = XMGX(2)/SXMGX
+          XMGX(3) = XMGX(3)/SXMGX
+!
+!---      Beta within the two-phase envelope  ---
+!
+          CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCY )
+!
+!---      Gas mole fractions ---
+!
+          XMGX(1) = BTX*ZMCY(1) + (1.D+0-BTX)*XMGX(1)
+          XMGX(2) = BTX*ZMCY(2) + (1.D+0-BTX)*XMGX(2)
+          XMGX(3) = BTX*ZMCY(3) + (1.D+0-BTX)*XMGX(3)
+!
+!---     Liquid mole fractions ---
+!
+          XMNX(1) = BTX*XMNX(1) + (1.D+0-BTX)*ZMCY(1)
+          XMNX(2) = BTX*XMNX(2) + (1.D+0-BTX)*ZMCY(2)
+          XMNX(3) = BTX*XMNX(3) + (1.D+0-BTX)*ZMCY(3)
+!
+!---    Upper-phase-envelope-gas phase  ---
+!
+        ELSEIF( NP_HT.EQ.3 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGX(1) = ZMCY(1)
+          XMGX(2) = ZMCY(2)
+          XMGX(3) = ZMCY(3)
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---      Nonaqueous-liquid mole fractions ---
+!
+          XMNX(1) = ZMCY(1)/FKLX(1)
+          XMNX(2) = ZMCY(2)/FKLX(2)
+          XMNX(3) = ZMCY(3)/FKLX(3)
+          SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+          XMNX(1) = XMNX(1)/SXMNX
+          XMNX(2) = XMNX(2)/SXMNX
+          XMNX(3) = XMNX(3)/SXMNX
+!
+!---    Lower-phase-envelope-gas phase  ---
+!
+        ELSEIF( NP_HT.EQ.4 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGX(1) = ZMCY(1)
+          XMGX(2) = ZMCY(2)
+          XMGX(3) = ZMCY(3)
+!
+!---      K-factors at the lower pressure envelope  ---
+!
+          CALL KF_LPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---      Nonaqueous-liquid mole fractions ---
+!
+          XMNX(1) = ZMCY(1)/FKLX(1)
+          XMNX(2) = ZMCY(2)/FKLX(2)
+          XMNX(3) = ZMCY(3)/FKLX(3)
+          SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+          XMNX(1) = XMNX(1)/SXMNX
+          XMNX(2) = XMNX(2)/SXMNX
+          XMNX(3) = XMNX(3)/SXMNX
+        ENDIF
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,XMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,XMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,XMGX,ZGX )
+!
+!---    CO2 solubility ---
+!
+        FUGAX = FUGX(1)*PVX*XMGX(1)
+        CALL SOL_LA( TX,FUGAX,XLSX,XMLX(1) )
+!
+!---    CH4 solubility ---
+!
+        FUGOX = FUGX(2)*PVX*XMGX(2)
+        CALL SOL_LO( TX,FUGOX,XLSX,XMLX(2) )
+!
+!---    N2 solubility ---
+!
+        FUGNX = FUGX(3)*PVX*XMGX(3)
+        CALL SOL_LN( TX,FUGNX,XLSX,XMLX(3) )
+!
+!---    Aqueous molecular weight ---
+!
+        WTMLX = (XMLX(1)*WTMA + XMLX(2)*WTMO + XMLX(3)*WTMN +
+     &    WTMW*(1.D+0-XMLX(1)-XMLX(2)-XMLX(3)))/
+     &    (1.D+0-XLSX+WTMW*XLSX/WTMS)
+        PPLX = MAX( PX,PSBX )
+        CALL DENS_B( TX,PPLX,XLSX,RHOBX )
+        XLAX = XMLX(1)*WTMA/WTMLX
+        XLOX = XMLX(2)*WTMO/WTMLX
+        XLNX = XMLX(3)*WTMN/WTMLX
+        CALL DENS_L( TX,RHOBX,XLAX,XLOX,XLNX,RHOLX )
+!
+!---    Aqueous molar density ---
+!
+        RHOMLX = RHOLX/WTMLX
+!
+!---    Gas molar density ---
+!
+        ISRX = 2
+        CALL DENS_W( TX,PVWX,RHOX,RHOGWX,ISRX )
+        RHOMGWX = RHOGWX/WTMW
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNX = PVX/(ZNX*TKX*RCU)
+!
+!---    Volume fraction of gas  ---
+!
+        STX = (BTX/RHOMGCX)/((BTX/RHOMGCX) + ((1.D+0-BTX)/RHOMNX))
+!
+!---    Mole fraction of components ---
+!
+        YMMY(1) = SLX*XMLX(1)*RHOMLX + SGNX*(STX*XMGX(1)*RHOMGCX +
+     &    (1.D+0-STX)*XMNX(1)*RHOMNX)
+        YMMY(2) = SLX*XMLX(2)*RHOMLX + SGNX*(STX*XMGX(2)*RHOMGCX +
+     &    (1.D+0-STX)*XMNX(2)*RHOMNX)
+        YMMY(3) = SLX*XMLX(3)*RHOMLX + SGNX*(STX*XMGX(3)*RHOMGCX +
+     &    (1.D+0-STX)*XMNX(3)*RHOMNX)
+        SYMMY = YMMY(1)+YMMY(2)+YMMY(3)
+!
+!---    Residual equations ---
+!
+        GX(1,M) = YMMX(NX(1)) - YMMY(NX(1))/(SYMMY+SMALL)
+        GX(2,M) = YMMX(NX(2)) - YMMY(NX(2))/(SYMMY+SMALL)
+  130 CONTINUE
+!
+!---  Load solution vector and Jacobian matrix for
+!     two-phase conditions  ---
+!
+      DO 140 M = 1,2
+        AJ(M,1) = (GX(M,2)-GX(M,1))/DZMCX(1)
+        AJ(M,2) = (GX(M,3)-GX(M,1))/DZMCX(2)
+        BJ(M) = -GX(M,1)
+ 140  CONTINUE
+!
+!---  Solve linear system  ---
+!
+      JP = 2
+      KP = 2
+      CALL LUDCMP( AJ,JP,KP,IJ,DJ )
+      CALL LUBKSB( AJ,JP,KP,IJ,BJ )
+!
+!---  Update primary unknowns  ---
+!
+      DO 150 NF = 1,2
+        DZMCX(NF) = SIGN( MIN( 5.D-2,ABS(BJ(NF)) ),BJ(NF) )
+        IF( YMMX(NX(NF))/EPSL.LT.EPSL ) THEN
+          ZMCX(NX(NF)) = 0.D+0
+          DZMCX(NF) = 0.D+0
+        ELSEIF( ZMCX(NX(NF))/EPSL.LT.EPSL 
+     &    .AND. DZMCX(NF).LT.0.D+0 ) THEN
+          ZMCX(NX(NF)) = 0.D+0
+          DZMCX(NF) = 0.D+0
+        ELSE
+          ZMCX(NX(NF)) = ZMCX(NX(NF)) + DZMCX(NF)
+          ZMCX(NX(NF)) = MAX( MIN( ZMCX(NX(NF)),1.D+0 ),0.D+0 )
+        ENDIF
+  150 CONTINUE
+      SZMCX = ZMCX(NX(1))+ZMCX(NX(2))
+      IF( (SZMCX-1.D+0).GT.0.D+0 ) THEN
+        ZMCX(NX(1)) = ZMCX(NX(1))/SZMCX
+        ZMCX(NX(2)) = ZMCX(NX(2))/SZMCX
+      ENDIF
+      ZMCX(NX(3)) = MIN( MAX( 1.D+0-ZMCX(NX(1))-ZMCX(NX(2)),0.D+0 ),
+     &  1.D+0 )
+!
+!---  Convergence check  ---
+!
+      IF( ABS(DZMCX(1)).GT.1.D-9 ) GOTO 110
+      IF( ABS(DZMCX(2)).GT.1.D-9 ) GOTO 110
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---  Nonaqueous liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+        BTX = 0.D+0
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = FKX(1)*ZMCX(1)
+        XMGX(2) = FKX(2)*ZMCX(2)
+        XMGX(3) = FKX(3)*ZMCX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX        
+!
+!---  Nonaqueous two-phase  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKLX(1)
+        XMNX(2) = ZMCX(2)/FKLX(2)
+        XMNX(3) = ZMCX(3)/FKLX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized gas mole fractions at the upper pressure
+!       envelope  ---
+!
+        XMGX(1) = ZMCX(1)*FKUX(1)
+        XMGX(2) = ZMCX(2)*FKUX(2)
+        XMGX(3) = ZMCX(3)*FKUX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX
+!
+!---    Beta within the two-phase envelope  ---
+!
+        CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = BTX*ZMCX(1) + (1.D+0-BTX)*XMGX(1)
+        XMGX(2) = BTX*ZMCX(2) + (1.D+0-BTX)*XMGX(2)
+        XMGX(3) = BTX*ZMCX(3) + (1.D+0-BTX)*XMGX(3)
+!
+!---   Liquid mole fractions ---
+!
+        XMNX(1) = BTX*XMNX(1) + (1.D+0-BTX)*ZMCX(1)
+        XMNX(2) = BTX*XMNX(2) + (1.D+0-BTX)*ZMCX(2)
+        XMNX(3) = BTX*XMNX(3) + (1.D+0-BTX)*ZMCX(3)
+!
+!---  Upper-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.3 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized liquid mole fractions at the upper pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKUX(1)
+        XMNX(2) = ZMCX(2)/FKUX(2)
+        XMNX(3) = ZMCX(3)/FKUX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+!
+!---  Lower-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.4 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKLX(1)
+        XMNX(2) = ZMCX(2)/FKLX(2)
+        XMNX(3) = ZMCX(3)/FKLX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+      ENDIF
+!
+!---  Peng-Robinson gas mixture coefficients  ---
+!
+      CALL PRC_X( AGX,AIX,BGX,XMGX )
+!
+!---  Peng-Robinson gas compressibility ---
+!
+      INDX = 1
+      CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---  Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+      CALL PRC_X( ANX,AIX,BNX,XMNX )
+!
+!---  Peng-Robinson nonaqueous-liquid compressibility ---
+!
+      INDX = 2
+      CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---  Peng-Robinson gas component fugacities ---
+!
+      CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,XMGX,ZGX )
+!
+!---  CO2 solubility ---
+!
+      FUGAX = FUGX(1)*PVX*XMGX(1)
+      CALL SOL_LA( TX,FUGAX,XLSX,XMLX(1) )
+!
+!---  CH4 solubility ---
+!
+      FUGOX = FUGX(2)*PVX*XMGX(2)
+      CALL SOL_LO( TX,FUGOX,XLSX,XMLX(2) )
+!
+!---  N2 solubility ---
+!
+      FUGNX = FUGX(3)*PVX*XMGX(3)
+      CALL SOL_LN( TX,FUGNX,XLSX,XMLX(3) )
+!
+!---  Aqueous molecular weight ---
+!
+      WTMLX = (XMLX(1)*WTMA + XMLX(2)*WTMO + XMLX(3)*WTMN +
+     &  WTMW*(1.D+0-XMLX(1)-XMLX(2)-XMLX(3)))/
+     &  (1.D+0-XLSX+WTMW*XLSX/WTMS)
+      PPLX = MAX( PX,PSBX )
+      CALL DENS_B( TX,PPLX,XLSX,RHOBX )
+      XLAX = XMLX(1)*WTMA/WTMLX
+      XLOX = XMLX(2)*WTMO/WTMLX
+      XLNX = XMLX(3)*WTMN/WTMLX
+      CALL DENS_L( TX,RHOBX,XLAX,XLOX,XLNX,RHOLX )
+!
+!---  Aqueous molar density ---
+!
+      RHOMLX = RHOLX/WTMLX
+!
+!---  Gas molar density ---
+!
+      ISRX = 2
+      CALL DENS_W( TX,PVWX,RHOX,RHOGWX,ISRX )
+      RHOMGWX = RHOGWX/WTMW
+      RHOMGCX = PVX/(ZGX*TKX*RCU)
+      RHOMGX = RHOMGCX + RHOMGWX
+!
+!---  Nonaqueous-liquid molar density ---
+!
+      RHOMNX = PVX/(ZNX*TKX*RCU)
+!
+!---  Volume fraction of gas  ---
+!
+      SHX = 0.D+0
+      STX = (BTX/RHOMGCX)/((BTX/RHOMGCX) + ((1.D+0-BTX)/RHOMNX))
+      SGX = STX*SGNX
+      SNX = (1.D+0-STX)*SGNX
+      SLIX = SLX + SIX
+      CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+      PNX = PGX - CPGNX
+      PLX = PGX - CPGLX
+!
+!---  Ice pressure  ---
+!
+      CALL ICE( TX,PLX,XLSX,TFPX,PIX )
+!
+!---  Ice saturation  ---
+!
+      CALL SP_HYDT_KE( PIX,PLX,PNX,SHX,SIX,SLX,IZN,N )
+!
+!---  Aqueous, gas, and nonaqueous liquid mole fractions  ---
+!
+      XMLAX = XMLX(1)
+      XMLOX = XMLX(2)
+      XMLNX = XMLX(3)
+      YMGAX = XMGX(1)
+      YMGOX = XMGX(2)
+      YMGNX = XMGX(3)
+      XMNAX = XMNX(1)
+      XMNOX = XMNX(2)
+      XMNNX = XMNX(3)
+      ZMCAX = ZMCX(1)
+      ZMCOX = ZMCX(2)
+      ZMCNX = ZMCX(3)
+!
+!---  Component vapor pressures  ---
+!
+      PVAX = PVX*YMGAX
+      PVOX = PVX*YMGOX
+      PVNX = PVX*YMGNX
+!
+!---  Hydrate properties for no-hydrate conditions  ---
+!
+      YMHGAX = 0.D+0
+      YMHGOX = 1.D+0
+      YMHGNX = 0.D+0
+      TEQHX = -TABS
+      XHAX = 0.D+0
+      XHOX = 0.D+0
+      XHNX = 0.D+0
+      XHWX = 1.D+0
+      RHOHX = 0.D+0
+      SHX = 0.D+0
+!
+!---  Hydrate equilibrium temperature at the vapor pressure conditions  ---
+!
+      PVHAX = PVAX
+      PVHOX = PVOX
+      PVHNX = PVNX
+      PVHX = PVHAX+PVHOX+PVHNX
+      IF( PVHX.GT.EPSL ) THEN
+        YMHGX(1) = PVHAX/PVHX
+        YMHGX(2) = PVHOX/PVHX
+        YMHGX(3) = PVHNX/PVHX
+        YMHGAX = YMHGX(1)
+        YMHGOX = YMHGX(2)
+        YMHGNX = YMHGX(3)
+!
+!---    Set interpretation concentrations to actuals  ---
+!
+        ZMIH_HT(1) = YMHGX(1)
+        ZMIH_HT(2) = YMHGX(2)
+        ZMIH_HT(3) = YMHGX(3)
+!
+!---    Hydrate equilibrium pressure as a function of temperature,
+!       vapor mole fractions, and inhibitor concentration  ---
+!
+        CALL HYD_P( TKX,YMHGX,XLSX,PEQHX )
+!
+!---    Hydrate composition at temperature,
+!       vapor mole fractions, and inhibitor concentration  ---
+!
+        IF( PVHX.GE.PEQHX ) THEN
+          CALL HYD_C( TKX,YMHGX,XLSX,RHOHX,XHAX,XHOX,
+     &      XHNX,XHWX,XMHAX,XMHOX,XMHNX,XMHWX )
+          PVHAX = YMHGX(1)*PVHX
+          PVHOX = YMHGX(2)*PVHX
+          PVHNX = YMHGX(3)*PVHX
+        ENDIF
+      ENDIF
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_IC2 group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_IC3( PEQHX,PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,
+     &  PSOX,PVAX,PVHAX,PVNX,PVHNX,PVOX,PVHOX,PVWX,RHOHX,
+     &  SHX,SIX,SGX,SLX,SNX,TX,TCRX,TCTX,TEQHX,TMHAX,TMHNX,TMHOX,
+     &  XHAX,XHNX,XHOX,XHWX,XLSX,YLSX,YMGAX,YMGNX,YMGOX,YMHGAX,YMHGNX,
+     &  YMHGOX,ZMCAX,ZMCNX,ZMCOX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for initial condition #3
+!
+!     SHX > 0.0
+!     SGX + SNX = 0.0
+!     SLX < 1.0
+!
+!     Input variables:
+!
+!     TX - temperature, C
+!     PX - pressure, Pa (absolute)
+!     YMMX(1) - mobile CO2 mole fraction of formers (input as PVAX )
+!     YMMX(2) - mobile CH4 mole fraction of formers (input as PVOX )
+!     YMMX(3) - mobile N2 mole fraction of formers (input as PVNX )
+!     or
+!     ZMCX(1) - total nonaqueous CO2 mole fraction (input as PVAX )
+!     ZMCX(2) - total nonaqueous CH4 mole fraction (input as PVOX )
+!     ZMCX(3) - total nonaqueous N2 mole fraction (input as PVNX )
+!     WLFX - relative saturation of dissolved hydrate 
+!             formers (input as XMLO )
+!     SHX - hydrate saturation
+!     YMHX(1) - hydrate CO2 mole fraction of formers (input as PVHAX)
+!     YMHX(2) - hydrate CH4 mole fraction of formers (input as PVHOX)
+!     YMHX(3) - hydrate N2 mole fraction of formers (input as PVHNX)
+!     IZN - rock/soil zonation number
+!     N - node number
+!
+!     Output variables:
+!
+!     PGX - gas pressure, guage Pa
+!     PIX - ice pressure, guage Pa
+!     PNX - nonaqueous liquid pressure, guage Pa
+!     PSBX - saturated brine vapor pressure, absolute Pa
+!     PVAX - mobile CO2 vapor pressure, absolute Pa
+!     PVHAX - hydrate CO2 vapor pressure, absolute Pa
+!     PVOX - mobile CH4 vapor pressure, absolute Pa
+!     PVHOX - hydrate CH4 vapor pressure, absolute Pa
+!     PVNX - mobile N2 vapor pressure, absolute Pa
+!     PVHNX - hydrate N2 vapor pressure, absolute Pa
+!     PVWX - water vapor pressure, absolute Pa
+!     RHOHX - hydrate density, kg/m^3
+!     RKGX - gas relative permeability
+!     RKLX - aqueous relative permeability tensor
+!     RKNX - nonaqueous liquid relative permeability
+!     SHX - hydrate saturation
+!     SIX - ice saturation
+!     SGX - gas saturation
+!     SLX - aqueous saturation
+!     SNX - nonaqueous liquid saturation
+!     TEQHX - hydrate equilibrium temperature, K
+!     TMHAX - total CO2 hydrate mass, kg
+!     TMHNX - total N2 hydrate mass, kg
+!     TMHOX - total CH4 hydrate mass, kg
+!     XHAX - CO2 hydrate mass fraction
+!     XHNX - N2 hydrate mass fraction
+!     XNOX - CH4 hydrate mass fraction
+!     XNWX - water hydrate mass fraction
+!     XLSX - dissolved salt aqueous mass fraction
+!     YLSX - total salt aqueous mass fraction
+!     YMGAX - CO2 mole fraction of mobile formers
+!     YMHGAX - CO2 mole fraction of hydrate formers
+!     YMGOX - CH4 mole fraction of mobile formers
+!     YMHGOX - CH4 mole fraction of hydrate formers
+!     ZMCAX - CO2 mole fraction of nonaqueous components
+!     ZMCNX - N2 mole fraction of nonaqueous components
+!     ZMCOX - CH4 mole fraction of nonaqueous components
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 18 August 2010.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE PORMED
+      USE HYST
+      USE HYDT
+      USE GRID
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 AIX(LHF_HT),ZMCX(LHF_HT),ZMCY(LHF_HT),DZMCX(LHF_HT)
+      REAL*8 XMGX(LHF_HT),XMGY(LHF_HT),DXMGX(LHF_HT)
+      REAL*8 XMNX(LHF_HT),XMLX(LHF_HT),YMMX(LHF_HT)
+      REAL*8 YMHX(LHF_HT)
+      REAL*8 YMHGX(LHF_HT),YMHGY(LHF_HT),XMHX(LHF_HT),DYMHGX(LHF_HT)
+      REAL*8 FUGLX(LHF_HT),FUGX(LHF_HT)
+      REAL*8 FKX(LHF_HT),FKLX(LHF_HT),FKUX(LHF_HT)
+      REAL*8 AJ(2,2),BJ(2),GX(2,3)
+      INTEGER IJ(2),NX(3)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_IC3'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PX = PSOX + PATM
+      PLX = PSOX
+      PGX = PSOX
+      PNX = PSOX
+!
+!---  Assign aqueous CO2, CH4, and N2 mole fraction of formers and
+!     aqueous relative saturation of formers  ---
+!
+      YMMX(1) = MIN( MAX( PVAX,0.D+0 ),1.D+0 )
+      YMMX(2) = MIN( MAX( PVOX,0.D+0 ),1.D+0 )
+      YMMX(3) = MIN( MAX( PVNX,0.D+0 ),1.D+0 )
+      WLFX = MIN( MAX( PVWX,0.D+0 ),1.D+0 )
+!
+!---  Assign hydrate CO2, CH4, and N2 mole fraction of formers  ---
+!
+      YMHX(1) = MIN( MAX( PVHAX,0.D+0 ),1.D+0 )
+      YMHX(2) = MIN( MAX( PVHOX,0.D+0 ),1.D+0 )
+      YMHX(3) = MIN( MAX( PVHNX,0.D+0 ),1.D+0 )
+!
+!---  Limit hydrate saturation  ---
+!
+      SHX = MIN( MAX( SHX,0.D+0 ),1.D+0 )
+      IF( SHX.LT.EPSL ) SHX = 0.D+0
+!
+!---  Peng-Robinson temperature dependent component 
+!     coefficients  ---
+!
+      CALL PRC_T( AIX,TKX )
+!
+!---  Brine salt mass fraction  ---
+!      
+      CALL SOL_LS( TX,XLSMX )
+      XLSX = MIN( YLSX,XLSMX )
+!
+!---  Interfacial surface tensions  ---
+!
+      SIG_GL = SCHR(5,IZN)
+      SIG_NL = SCHR(6,IZN)
+      SIG_GN = SCHR(7,IZN)
+      SIG_HL = SCHR(9,IZN)
+      SIG_IL = SCHR(9,IZN)
+      IF( ISLC(7).EQ.2 .OR. ISLC(7).EQ.3 )
+     &  CALL SFT_L( TX,XLSX,SIG_GL )
+      CA_NL = ((SIG_NL**2) - (SIG_GN**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_NL)
+      CA_GN = ((SIG_GN**2) - (SIG_NL**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_GN)
+!
+!---  Interphase scaling factors  ---
+!
+      BGL = SCHR(8,IZN)/SIG_GL
+      BNL = SCHR(8,IZN)/(SIG_NL*CA_NL)
+      BGN = SCHR(8,IZN)/(SIG_GN*CA_GN)
+      BHL = SCHR(8,IZN)/SIG_HL
+      BIL = SCHR(8,IZN)/SIG_HL
+!
+!---  Entry pressure with hydrate barrier adjustment  ---
+!
+      SHZ = MAX( SHX,1.D-9 )
+      HCPBFX = 1.D+0
+      IF( ISCHR(IZN).EQ.11 .OR. ISCHR(IZN).EQ.12 ) THEN
+        HCPBFX = MAX( 1.D+0,SCHR(10,IZN) + SCHR(11,IZN)*
+     &    SIN(SCHR(12,IZN)*SHZ + SCHR(13,IZN)) )
+      ELSEIF( ISCHR(IZN).EQ.13 .OR. ISCHR(IZN).EQ.14 ) THEN
+        HCPBFX = (1.D+0-SHZ)**(-(SCHR(10,IZN)-1.D+0)/SCHR(10,IZN))
+      ENDIF
+      ENPR = SCHR(2,IZN)*RHORL*GRAV*HCPBFX
+!
+!---  Ice pressure  ---
+!
+      CALL ICE( TX,PLX,XLSX,TFPX,PIX )
+!
+!---  Ice saturation  ---
+!
+      CALL SP_HYDT_KE( PIX,PLX,PNX,SHX,SIX,SLX,IZN,N )
+!
+!---  Nonaqueous saturations  ---
+!
+      SGX = 0.D+0
+      SNX = 0.D+0
+      SLIX = SLX + SIX
+      CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+      PGX = PLX + CPGLX
+      PNX = PLX + CPNLX
+!
+!---  Saturated water vapor pressure and brine density  ---
+!
+      CALL SP_B( TX,XLSX,PSBX )
+      PPLX = MAX( PX,PSBX )
+      CALL DENS_B( TX,PPLX,XLSX,RHOBX )
+!
+!---  Skip Newton-Raphson loop for aqueous relative saturation
+!     equal to 0.0  ---
+!
+      IF( WLFX/EPSL.LT.EPSL ) THEN
+        DO 10 NF = 1,3
+          XMLX(NF) = 0.D+0
+          XMGX(NF) = 0.D+0
+          XMNX(NF) = 0.D+0
+          ZMCX(NF) = 0.D+0
+   10   CONTINUE
+        GOTO 300
+      ENDIF
+!
+!---  Guess mole fraction of CO2, CH4, and N2 in the gas/nonaqueous
+!     liquid ---
+!
+!      PVAX = PVX*PVAX
+!      PVOX = PVX*PVOX
+!      PVNX = PVX*PVNX
+      CALL SOL_LA( TX,PVAX,XLSX,XMLAX )
+      CALL SOL_LO( TX,PVOX,XLSX,XMLOX )
+      CALL SOL_LN( TX,PVNX,XLSX,XMLNX )
+      XMGX(1) = YMMX(1)/(XMLAX+SMALL)
+      XMGX(2) = YMMX(2)/(XMLOX+SMALL)
+      XMGX(3) = YMMX(3)/(XMLNX+SMALL)
+      SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+      XMGX(1) = XMGX(1)/SXMGX
+      XMGX(2) = XMGX(2)/SXMGX
+      XMGX(3) = XMGX(3)/SXMGX
+!
+!---  Two-variable Newton-Raphson loop: 
+!     gas mole fractions  ---
+!
+      NC = 0
+  110 CONTINUE
+      NC = NC + 1
+      IF( NC.GT.32 ) THEN
+        INDX = 17
+        CHMSG = 'Unconverged FLH_IC3: Gas Mole Fraction of Components'
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Primary variable switching scheme, selecting the components
+!     with the lowest concentrations  ---
+!
+      IF( XMGX(3).GE.MAX( XMGX(1),XMGX(2) ) ) THEN
+        NX(1) = 1
+        NX(2) = 2
+        NX(3) = 3
+      ELSEIF( XMGX(1).GE.MAX( XMGX(2),XMGX(3) ) ) THEN
+        NX(1) = 2
+        NX(2) = 3
+        NX(3) = 1
+      ELSE
+        NX(1) = 3
+        NX(2) = 1
+        NX(3) = 2
+      ENDIF
+      DO 130 M = 1,3
+        DO 120 NF = 1,2
+          XMGY(NX(NF)) = XMGX(NX(NF))
+          DXMGX(NF) = SIGN( 1.D-6,5.D-1-XMGX(NX(NF)) )
+  120   CONTINUE
+        IF( M.EQ.2 ) XMGY(NX(1)) = XMGX(NX(1)) + DXMGX(1)
+        IF( M.EQ.3 ) XMGY(NX(2)) = XMGX(NX(2)) + DXMGX(2)
+        XMGY(NX(3)) = MIN( MAX( 1.D+0-XMGY(NX(1))-XMGY(NX(2)),0.D+0 ),
+     &    1.D+0 )
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,XMGY )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,XMGY,ZGX )
+!
+!---    CO2 solubility ---
+!
+        FUGAX = FUGX(1)*PVX*XMGY(1)
+        CALL SOL_LA( TX,FUGAX,XLSX,XMLX(1) )
+!
+!---    CH4 solubility ---
+!
+        FUGOX = FUGX(2)*PVX*XMGY(2)
+        CALL SOL_LO( TX,FUGOX,XLSX,XMLX(2) )
+!
+!---    N2 solubility ---
+!
+        FUGNX = FUGX(3)*PVX*XMGY(3)
+        CALL SOL_LN( TX,FUGNX,XLSX,XMLX(3) )
+!
+!---    Residual equations ---
+!
+        SXMLX = XMLX(1)+XMLX(2)+XMLX(3)
+        GX(1,M) = YMMX(NX(1)) - XMLX(NX(1))/(SXMLX+SMALL)
+        GX(2,M) = YMMX(NX(2)) - XMLX(NX(2))/(SXMLX+SMALL)
+  130 CONTINUE
+!
+!---  Load solution vector and Jacobian matrix for
+!     two-phase conditions  ---
+!
+      DO 140 M = 1,2
+        AJ(M,1) = (GX(M,2)-GX(M,1))/DXMGX(1)
+        AJ(M,2) = (GX(M,3)-GX(M,1))/DXMGX(2)
+        BJ(M) = -GX(M,1)
+ 140  CONTINUE
+!
+!---  Solve linear system  ---
+!
+      JP = 2
+      KP = 2
+      CALL LUDCMP( AJ,JP,KP,IJ,DJ )
+      CALL LUBKSB( AJ,JP,KP,IJ,BJ )
+!
+!---  Update primary unknowns  ---
+!
+      DO 150 NF = 1,2
+        DXMGX(NF) = SIGN( MIN( 5.D-2,ABS(BJ(NF)) ),BJ(NF) )
+        IF( YMMX(NX(NF))/EPSL.LT.EPSL ) THEN
+          XMGX(NX(NF)) = 0.D+0
+          DXMGX(NF) = 0.D+0
+        ELSEIF( XMGX(NX(NF))/EPSL.LT.EPSL 
+     &    .AND. DXMGX(NF).LT.0.D+0 ) THEN
+          XMGX(NX(NF)) = 0.D+0
+          DXMGX(NF) = 0.D+0
+        ELSE
+          XMGX(NX(NF)) = XMGX(NX(NF)) + DXMGX(NF)
+          XMGX(NX(NF)) = MAX( MIN( XMGX(NX(NF)),1.D+0 ),0.D+0 )
+        ENDIF
+  150 CONTINUE
+      SXMGX = XMGX(NX(1))+XMGX(NX(2))
+      IF( (SXMGX-1.D+0).GT.0.D+0 ) THEN
+        XMGX(NX(1)) = XMGX(NX(1))/SXMGX
+        XMGX(NX(2)) = XMGX(NX(2))/SXMGX
+      ENDIF
+      XMGX(NX(3)) = MIN( MAX( 1.D+0-XMGX(NX(1))-XMGX(NX(2)),0.D+0 ),
+     &  1.D+0 )
+!
+!---  Convergence check  ---
+!
+      IF( ABS(DXMGX(1)).GT.1.D-9 ) GOTO 110
+      IF( ABS(DXMGX(2)).GT.1.D-9 ) GOTO 110
+!
+!---  Peng-Robinson gas mixture coefficients  ---
+!
+      CALL PRC_X( AGX,AIX,BGX,XMGX )
+!
+!---  Peng-Robinson gas compressibility ---
+!
+      INDX = 1
+      CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---  Peng-Robinson gas component fugacities ---
+!
+      CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,XMGX,ZGX )
+!
+!---  CO2 solubility ---
+!
+      FUGAX = FUGX(1)*PVX*XMGX(1)
+      CALL SOL_LA( TX,FUGAX,XLSX,XMLX(1) )
+!
+!---  CH4 solubility ---
+!
+      FUGOX = FUGX(2)*PVX*XMGX(2)
+      CALL SOL_LO( TX,FUGOX,XLSX,XMLX(2) )
+!
+!---  N2 solubility ---
+!
+      FUGNX = FUGX(3)*PVX*XMGX(3)
+      CALL SOL_LN( TX,FUGNX,XLSX,XMLX(3) )
+!
+!---  Use gas component concentrations as guesses to the 
+!     nonaqueous component concentrations  ---
+!
+      ZMCX(1) = XMGX(1)
+      ZMCX(2) = XMGX(2)
+      ZMCX(3) = XMGX(3)
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+        BTX = 1.D+0
+!
+!---  Nonaqueous liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+        BTX = 0.D+0
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Component mole fractions ---
+!
+        ZMCX(1) = XMGX(1)/FKX(1)
+        ZMCX(2) = XMGX(2)/FKX(2)
+        ZMCX(3) = XMGX(3)/FKX(3)
+        SZMCX = ZMCX(1)+ZMCX(2)+ZMCX(3)
+        ZMCX(1) = ZMCX(1)/SZMCX
+        ZMCX(2) = ZMCX(2)/SZMCX
+        ZMCX(3) = MIN( MAX( 1.D+0-ZMCX(1)-ZMCX(2),0.D+0 ),1.D+0 )
+!
+!---  Two-phase conditions  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+        BTX = 5.D-1
+!
+!---    Component mole fractions ---
+!
+        ZMCX(1) = XMGX(1)*(1.D+0+BTX*(FKX(1)-1.D+0))/FKX(1)
+        ZMCX(2) = XMGX(2)*(1.D+0+BTX*(FKX(2)-1.D+0))/FKX(2)
+        ZMCX(3) = XMGX(3)*(1.D+0+BTX*(FKX(3)-1.D+0))/FKX(3)
+        SZMCX = ZMCX(1)+ZMCX(2)+ZMCX(3)
+        ZMCX(1) = ZMCX(1)/SZMCX
+        ZMCX(2) = ZMCX(2)/SZMCX
+        ZMCX(3) = MIN( MAX( 1.D+0-ZMCX(1)-ZMCX(2),0.D+0 ),1.D+0 )
+!
+!---  Upper-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.3 ) THEN
+        BTX = 1.D+0
+!
+!---  Lower-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.4 ) THEN
+        BTX = 1.D+0
+      ENDIF
+      NC = 0
+  210 CONTINUE
+      NC = NC + 1
+      IF( NC.GT.32 ) THEN
+        INDX = 17
+        CHMSG = 'Unconverged FLH_IC3: Nonaqueous Mole Fraction of ' // 
+     &    'Components'
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Primary variable switching scheme, selecting the components
+!     with the lowest concentrations  ---
+!
+      IF( ZMCX(3).GE.MAX( ZMCX(1),ZMCX(2) ) ) THEN
+        NX(1) = 1
+        NX(2) = 2
+        NX(3) = 3
+      ELSEIF( ZMCX(1).GE.MAX( ZMCX(2),ZMCX(3) ) ) THEN
+        NX(1) = 2
+        NX(2) = 3
+        NX(3) = 1
+      ELSE
+        NX(1) = 3
+        NX(2) = 1
+        NX(3) = 2
+      ENDIF
+      DO 230 M = 1,3
+        DO 220 NF = 1,2
+          ZMCY(NX(NF)) = ZMCX(NX(NF))
+          DZMCX(NF) = SIGN( 1.D-6,5.D-1-ZMCX(NX(NF)) )
+  220   CONTINUE
+        IF( M.EQ.2 ) ZMCY(NX(1)) = ZMCX(NX(1)) + DZMCX(1)
+        IF( M.EQ.3 ) ZMCY(NX(2)) = ZMCX(NX(2)) + DZMCX(2)
+        ZMCY(NX(3)) = MIN( MAX( 1.D+0-ZMCY(NX(1))-ZMCY(NX(2)),0.D+0 ),
+     &    1.D+0 )
+!
+!---    Determine phase state of nonaqueous phases  ---
+!
+        CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCY,NP_HT )
+!
+!---    Nonaqueous gas phase  ---
+!
+        IF( NP_HT.EQ.0 ) THEN
+!
+!---      Gas mole fractions ---
+!
+          XMGY(NX(1)) = ZMCY(NX(1))
+          XMGY(NX(2)) = ZMCY(NX(2))
+          XMGY(NX(3)) = ZMCY(NX(3))
+!
+!---      Liquid mole fractions ---
+!
+          XMNX(NX(1)) = ZMCY(NX(1))
+          XMNX(NX(2)) = ZMCY(NX(2))
+          XMNX(NX(3)) = ZMCY(NX(3))
+!
+!---    Nonaqueous liquid phase  ---
+!
+        ELSEIF( NP_HT.EQ.1 ) THEN
+!
+!---      Liquid mole fractions ---
+!
+          XMNX(NX(1)) = ZMCY(NX(1))
+          XMNX(NX(2)) = ZMCY(NX(2))
+          XMNX(NX(3)) = ZMCY(NX(3))
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKX )
+!
+!---      Gas mole fractions ---
+!
+          XMGY(NX(1)) = FKX(NX(1))*ZMCY(NX(1))
+          XMGY(NX(2)) = FKX(NX(2))*ZMCY(NX(2))
+          XMGY(NX(3)) = FKX(NX(3))*ZMCY(NX(3))
+          SXMGY = XMGY(NX(1))+XMGY(NX(2))+XMGY(NX(3))
+          XMGY(NX(1)) = XMGY(NX(1))/SXMGY
+          XMGY(NX(2)) = XMGY(NX(2))/SXMGY
+          XMGY(NX(3)) = XMGY(NX(3))/SXMGY        
+!
+!---    Nonaqueous two-phase  ---
+!
+        ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---      K-factors at the lower pressure envelope  ---
+!
+          CALL KF_LPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---      Normalized liquid mole fractions at the lower pressure
+!         envelope  ---
+!
+          XMNX(NX(1)) = ZMCY(NX(1))/FKLX(NX(1))
+          XMNX(NX(2)) = ZMCY(NX(2))/FKLX(NX(2))
+          XMNX(NX(3)) = ZMCY(NX(3))/FKLX(NX(3))
+          SXMNX = XMNX(NX(1))+XMNX(NX(2))+XMNX(NX(3))
+          XMNX(NX(1)) = XMNX(NX(1))/SXMNX
+          XMNX(NX(2)) = XMNX(NX(2))/SXMNX
+          XMNX(NX(3)) = XMNX(NX(3))/SXMNX
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKUX )
+!
+!---      Normalized gas mole fractions at the upper pressure
+!         envelope  ---
+!
+          XMGY(NX(1)) = ZMCY(NX(1))*FKUX(NX(1))
+          XMGY(NX(2)) = ZMCY(NX(2))*FKUX(NX(2))
+          XMGY(NX(3)) = ZMCY(NX(3))*FKUX(NX(3))
+          SXMGX = XMGY(NX(1))+XMGY(NX(2))+XMGY(NX(3))
+          XMGY(NX(1)) = XMGY(NX(1))/SXMGX
+          XMGY(NX(2)) = XMGY(NX(2))/SXMGX
+          XMGY(NX(3)) = XMGY(NX(3))/SXMGX
+!
+!---      Beta within the two-phase envelope  ---
+!
+          CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCY )
+!
+!---      Gas mole fractions ---
+!
+          XMGY(NX(1)) = BTX*ZMCY(NX(1)) + (1.D+0-BTX)*XMGY(NX(1))
+          XMGY(NX(2)) = BTX*ZMCY(NX(2)) + (1.D+0-BTX)*XMGY(NX(2))
+          XMGY(NX(3)) = BTX*ZMCY(NX(3)) + (1.D+0-BTX)*XMGY(NX(3))
+!
+!---     Liquid mole fractions ---
+!
+          XMNX(NX(1)) = BTX*XMNX(NX(1)) + (1.D+0-BTX)*ZMCY(NX(1))
+          XMNX(NX(2)) = BTX*XMNX(NX(2)) + (1.D+0-BTX)*ZMCY(NX(2))
+          XMNX(NX(3)) = BTX*XMNX(NX(3)) + (1.D+0-BTX)*ZMCY(NX(3))
+!
+!---    Upper-phase-envelope-gas phase  ---
+!
+        ELSEIF( NP_HT.EQ.3 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGY(NX(1)) = ZMCY(NX(1))
+          XMGY(NX(2)) = ZMCY(NX(2))
+          XMGY(NX(3)) = ZMCY(NX(3))
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---      Normalized liquid mole fractions at the upper pressure
+!         envelope  ---
+!
+          XMNX(NX(1)) = ZMCY(NX(1))/FKUX(NX(1))
+          XMNX(NX(2)) = ZMCY(NX(2))/FKUX(NX(2))
+          XMNX(NX(3)) = ZMCY(NX(3))/FKUX(NX(3))
+          SXMNX = XMNX(NX(1))+XMNX(NX(2))+XMNX(NX(3))
+          XMNX(NX(1)) = XMNX(NX(1))/SXMNX
+          XMNX(NX(2)) = XMNX(NX(2))/SXMNX
+          XMNX(NX(3)) = XMNX(NX(3))/SXMNX
+!
+!---    Lower-phase-envelope-gas phase  ---
+!
+        ELSEIF( NP_HT.EQ.4 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGY(NX(1)) = ZMCY(NX(1))
+          XMGY(NX(2)) = ZMCY(NX(2))
+          XMGY(NX(3)) = ZMCY(NX(3))
+!
+!---      K-factors at the lower pressure envelope  ---
+!
+          CALL KF_LPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---      Normalized liquid mole fractions at the lower pressure
+!         envelope  ---
+!
+          XMNX(NX(1)) = ZMCY(NX(1))/FKLX(NX(1))
+          XMNX(NX(2)) = ZMCY(NX(2))/FKLX(NX(2))
+          XMNX(NX(3)) = ZMCY(NX(3))/FKLX(NX(3))
+          SXMNX = XMNX(NX(1))+XMNX(NX(2))+XMNX(NX(3))
+          XMNX(NX(1)) = XMNX(NX(1))/SXMNX
+          XMNX(NX(2)) = XMNX(NX(2))/SXMNX
+          XMNX(NX(3)) = XMNX(NX(3))/SXMNX
+        ENDIF
+!
+!---    Residual equations ---
+!
+        GX(1,M) = XMGX(NX(1)) - XMGY(NX(1))
+        GX(2,M) = XMGX(NX(2)) - XMGY(NX(2))
+  230 CONTINUE
+!
+!---  Load solution vector and Jacobian matrix for
+!     two-phase conditions  ---
+!
+      DO 240 M = 1,2
+        AJ(M,1) = (GX(M,2)-GX(M,1))/DZMCX(1)
+        AJ(M,2) = (GX(M,3)-GX(M,1))/DZMCX(2)
+        BJ(M) = -GX(M,1)
+ 240  CONTINUE
+!
+!---  Solve linear system  ---
+!
+      JP = 2
+      KP = 2
+      CALL LUDCMP( AJ,JP,KP,IJ,DJ )
+      CALL LUBKSB( AJ,JP,KP,IJ,BJ )
+!
+!---  Update primary unknowns  ---
+!
+      DO 250 NF = 1,2
+        DZMCX(NF) = SIGN( MIN( 5.D-2,ABS(BJ(NF)) ),BJ(NF) )
+        IF( XMGX(NX(NF))/EPSL.LT.EPSL ) THEN
+          ZMCX(NX(NF)) = 0.D+0
+          DZMCX(NF) = 0.D+0
+        ELSEIF( ZMCX(NX(NF))/EPSL.LT.EPSL 
+     &   .AND. DZMCX(NF).LT.0.D+0 ) THEN
+          ZMCX(NX(NF)) = 0.D+0
+          DZMCX(NF) = 0.D+0
+        ELSE
+          ZMCX(NX(NF)) = ZMCX(NX(NF)) + DZMCX(NF)
+          ZMCX(NX(NF)) = MAX( MIN( ZMCX(NX(NF)),1.D+0 ),0.D+0 )
+        ENDIF
+  250 CONTINUE
+      SZMCX = ZMCX(NX(1))+ZMCX(NX(2))
+      IF( (SZMCX-1.D+0).GT.0.D+0 ) THEN
+        ZMCX(NX(1)) = ZMCX(NX(1))/SZMCX
+        ZMCX(NX(2)) = ZMCX(NX(2))/SZMCX
+      ENDIF
+      ZMCX(NX(3)) = MIN( MAX( 1.D+0-ZMCX(NX(1))-ZMCX(NX(2)),0.D+0 ),
+     &  1.D+0 )
+!
+!---  Convergence check  ---
+!
+      IF( ABS(DZMCX(1)).GT.1.D-9 ) GOTO 210
+      IF( ABS(DZMCX(2)).GT.1.D-9 ) GOTO 210
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---  Nonaqueous liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = FKX(1)*ZMCX(1)
+        XMGX(2) = FKX(2)*ZMCX(2)
+        XMGX(3) = FKX(3)*ZMCX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX        
+!
+!---  Nonaqueous two-phase  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKLX(1)
+        XMNX(2) = ZMCX(2)/FKLX(2)
+        XMNX(3) = ZMCX(3)/FKLX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized gas mole fractions at the upper pressure
+!       envelope  ---
+!
+        XMGX(1) = ZMCX(1)*FKUX(1)
+        XMGX(2) = ZMCX(2)*FKUX(2)
+        XMGX(3) = ZMCX(3)*FKUX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX
+!
+!---    Beta within the two-phase envelope  ---
+!
+        CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = BTX*ZMCX(1) + (1.D+0-BTX)*XMGX(1)
+        XMGX(2) = BTX*ZMCX(2) + (1.D+0-BTX)*XMGX(2)
+        XMGX(3) = BTX*ZMCX(3) + (1.D+0-BTX)*XMGX(3)
+!
+!---   Liquid mole fractions ---
+!
+        XMNX(1) = BTX*XMNX(1) + (1.D+0-BTX)*ZMCX(1)
+        XMNX(2) = BTX*XMNX(2) + (1.D+0-BTX)*ZMCX(2)
+        XMNX(3) = BTX*XMNX(3) + (1.D+0-BTX)*ZMCX(3)
+!
+!---  Upper-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.3 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized liquid mole fractions at the upper pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKUX(1)
+        XMNX(2) = ZMCX(2)/FKUX(2)
+        XMNX(3) = ZMCX(3)/FKUX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+!
+!---  Lower-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.4 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKLX(1)
+        XMNX(2) = ZMCX(2)/FKLX(2)
+        XMNX(3) = ZMCX(3)/FKLX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+      ENDIF
+!
+!---  Converged aqueous concentrations and phantom nonaqueous
+!     phase equilibria  ---
+!
+  300 CONTINUE
+!
+!---  Aqueous, gas, and nonaqueous liquid mole fractions  ---
+!
+      XMLAX = XMLX(1)
+      XMLOX = XMLX(2)
+      XMLNX = XMLX(3)
+      YMGAX = XMGX(1)
+      YMGOX = XMGX(2)
+      YMGNX = XMGX(3)
+      XMNAX = XMNX(1)
+      XMNOX = XMNX(2)
+      XMNNX = XMNX(3)
+      ZMCAX = ZMCX(1)
+      ZMCOX = ZMCX(2)
+      ZMCNX = ZMCX(3)
+!
+!---  Try Ruprecht guess scheme first then least square root error
+!     scheme next  ---
+!
+      SLOOP : DO ISCMX = 1,2
+      IF( ISCMX.EQ.1 ) THEN      
+!
+!---  Ruprecht guess scheme  ---
+!
+      YMHGX(1) = 0.64*YMHX(1)
+      YMHGX(2) = 0.62*YMHX(2)
+      YMHGX(3) = 1.D+0 - YMHGX(1) - YMHGX(2)
+      IF( YMHGX(3).LT.EPSL ) YMHGX(3) = 0.D+0
+      IF( YMHX(1)/EPSL.LT.EPSL .AND. YMHX(2)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 0.D+0
+        YMHGX(2) = 0.D+0
+        YMHGX(3) = 1.D+0
+      ELSEIF( YMHX(2)/EPSL.LT.EPSL .AND. YMHX(3)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 1.D+0
+        YMHGX(2) = 0.D+0
+        YMHGX(3) = 0.D+0
+      ELSEIF( YMHX(1)/EPSL.LT.EPSL .AND. YMHX(3)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 0.D+0
+        YMHGX(2) = 1.D+0
+        YMHGX(3) = 0.D+0
+      ELSEIF( YMHX(1)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 0.D+0
+        VARX = (YMHGX(2)+YMHGX(3))
+        YMHGX(2) = YMHGX(2)/VARX
+        YMHGX(3) = YMHGX(3)/VARS
+      ELSEIF( YMHX(2)/EPSL.LT.EPSL ) THEN
+        VARX = (YMHGX(1)+YMHGX(3))
+        YMHGX(1) = YMHGX(1)/VARX
+        YMHGX(2) = 0.D+0
+        YMHGX(3) = YMHGX(3)/VARX
+      ELSEIF( YMHX(3)/EPSL.LT.EPSL ) THEN
+        VARX = (YMHGX(1)+YMHGX(2))
+        YMHGX(1) = YMHGX(1)/VARX
+        YMHGX(2) = YMHGX(2)/VARX
+        YMHGX(3) = 0.D+0
+      ENDIF
+      ELSE
+!
+!---  Initial guesses of hydrate-gas mole fraction of formers  ---
+!
+      RMX = 1.D+20
+      IX = 0
+      JX = 0
+      DO J = 1,21
+        DO I = 1,22-J
+          YMHGX(1) = REAL(I-1)*5.D-2
+          YMHGX(2) = REAL(J-1)*5.D-2
+          YMHGX(3) = 1.D+0 - YMHGX(1) - YMHGX(2)
+          IF( YMHGX(3).LT.EPSL ) YMHGX(3) = 0.D+0
+!
+!---      Set interpretation concentrations to actuals  ---
+!
+          ZMIH_HT(1) = YMHGX(1)
+          ZMIH_HT(2) = YMHGX(2)
+          ZMIH_HT(3) = YMHGX(3)
+!
+!---      Hydrate composition at temperature and vapor mole fraction
+!         of formers  ---
+!
+          CALL HYD_X( TKX,YMHGX,XLSX,RHOHX,
+     &      XHAX,XHOX,XHNX,XHWX,XMHAX,XMHOX,XMHNX,XMHWX )
+          XMHX(1) = XMHAX
+          XMHX(2) = XMHOX
+          XMHX(3) = XMHNX
+!
+!---      Residual equations ---
+!
+          SXMHX = XMHX(1) + XMHX(2) + XMHX(3)
+          YMHAX = XMHX(1)/(SXMHX+SMALL)
+          YMHOX = XMHX(2)/(SXMHX+SMALL)
+          YMHNX = XMHX(3)/(SXMHX+SMALL)
+          GX(1,1) = YMHX(1) - XMHX(1)/(SXMHX+SMALL)
+          GX(1,2) = YMHX(2) - XMHX(2)/(SXMHX+SMALL)
+          GX(1,3) = YMHX(3) - XMHX(3)/(SXMHX+SMALL)
+          RX = SQRT( (GX(1,1)**2) + (GX(1,2)**2) + (GX(1,3)**2) )
+          IF( RX.LT.RMX ) THEN
+            RMX = RX
+            IX = I
+            JX = J
+          ENDIF
+        ENDDO
+      ENDDO
+      YMHGX(1) = REAL(IX-1)*5.D-2
+      YMHGX(2) = REAL(JX-1)*5.D-2
+      YMHGX(3) = 1.D+0 - YMHGX(1) - YMHGX(2)
+      IF( YMHGX(3).LT.EPSL ) YMHGX(3) = 0.D+0
+      ENDIF
+!
+!---  Set interpretation concentrations to actuals  ---
+!
+      ZMIH_HT(1) = YMHGX(1)
+      ZMIH_HT(2) = YMHGX(2)
+      ZMIH_HT(3) = YMHGX(3)
+!
+!---  Two-variable Newton-Raphson loop: 
+!     hydrate mole fractions  ---
+!
+      NC = 0
+  510 CONTINUE
+      NC = NC + 1
+      IF( NC.GT.32 ) THEN
+        IF( ISCMX.EQ.1 ) CYCLE SLOOP
+        INDX = 17
+        CHMSG = 'Unconverged FLH_IC3: Hydrate-Gas Mole Fraction of ' //
+     &    'Formers'
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Primary variable switching scheme, selecting the components
+!     with the lowest concentrations  ---
+!
+      IF( YMHX(3).GE.MAX( YMHX(1),YMHX(2) ) ) THEN
+        NX(1) = 1
+        NX(2) = 2
+        NX(3) = 3
+      ELSEIF( YMHX(1).GE.MAX( YMHX(2),YMHX(3) ) ) THEN
+        NX(1) = 2
+        NX(2) = 3
+        NX(3) = 1
+      ELSE
+        NX(1) = 3
+        NX(2) = 1
+        NX(3) = 2
+      ENDIF
+      DO 530 M = 1,3
+        DO 520 NF = 1,2
+          YMHGY(NX(NF)) = YMHGX(NX(NF))
+          DYMHGX(NF) = SIGN( 1.D-6,5.D-1-YMHGX(NX(NF)) )
+  520   CONTINUE
+        IF( M.EQ.2 ) YMHGY(NX(1)) = YMHGX(NX(1)) + DYMHGX(1)
+        IF( M.EQ.3 ) YMHGY(NX(2)) = YMHGX(NX(2)) + DYMHGX(2)
+        YMHGY(NX(3)) = MIN( MAX( 1.D+0-YMHGY(NX(1))-YMHGY(NX(2)),
+     &    0.D+0 ),1.D+0 )
+!
+!---    Hydrate equilibrium pressure and hydrate composition at 
+!       temperature, vapor mole fraction of formers, and inhibitor
+!       concentration  ---
+!
+        CALL HYD_P( TKX,YMHGY,XLSX,PEQHX )
+        CALL HYD_C( TKX,YMHGY,XLSX,RHOHX,XHAX,XHOX,XHNX,XHWX,
+     &    XMHAX,XMHOX,XMHNX,XMHWX )
+        XMHX(1) = XMHAX
+        XMHX(2) = XMHOX
+        XMHX(3) = XMHNX
+!
+!---    Residual equations ---
+!
+        SXMHX = XMHX(1) + XMHX(2) + XMHX(3)
+        GX(1,M) = YMHX(NX(1)) - XMHX(NX(1))/(SXMHX+SMALL)
+        GX(2,M) = YMHX(NX(2)) - XMHX(NX(2))/(SXMHX+SMALL)
+  530 CONTINUE
+!
+!---  Load solution vector and Jacobian matrix for
+!     two-phase conditions  ---
+!
+      DO 540 M = 1,2
+        AJ(M,1) = (GX(M,2)-GX(M,1))/DYMHGX(1)
+        AJ(M,2) = (GX(M,3)-GX(M,1))/DYMHGX(2)
+        BJ(M) = -GX(M,1)
+ 540  CONTINUE
+!
+!---  Solve linear system  ---
+!
+      IF( ABS(AJ(1,1))/EPSL.LT.EPSL .OR. ABS(AJ(1,1))/EPSL.LT.EPSL )
+     &  CYCLE SLOOP
+      JP = 2
+      KP = 2
+      CALL LUDCMP( AJ,JP,KP,IJ,DJ )
+      CALL LUBKSB( AJ,JP,KP,IJ,BJ )
+!
+!---  Update primary unknowns  ---
+!
+      DO 550 NF = 1,2
+        DYMHGX(NF) = SIGN( MIN( 5.D-2,ABS(BJ(NF)) ),BJ(NF) )
+        IF( YMHX(NX(NF))/EPSL.LT.EPSL ) THEN
+          YMHGX(NX(NF)) = 0.D+0
+          DYMHGX(NF) = 0.D+0
+        ELSEIF( YMHGX(NX(NF))/EPSL.LT.EPSL 
+     &    .AND. DYMHGX(NF).LT.0.D+0 ) THEN
+          YMHGX(NX(NF)) = 0.D+0
+          DYMHGX(NF) = 0.D+0
+        ELSE
+          YMHGX(NX(NF)) = YMHGX(NX(NF)) + DYMHGX(NF)
+          YMHGX(NX(NF)) = MAX( MIN( YMHGX(NX(NF)),1.D+0 ),0.D+0 )
+        ENDIF
+  550 CONTINUE
+      SYMHGX = YMHGX(NX(1))+YMHGX(NX(2))
+      IF( (SYMHGX-1.D+0).GT.0.D+0 ) THEN
+        YMHGX(NX(1)) = YMHGX(NX(1))/SYMHGX
+        YMHGX(NX(2)) = YMHGX(NX(2))/SYMHGX
+      ENDIF
+      YMHGX(NX(3)) = MIN( MAX( 1.D+0-YMHGX(NX(1))-YMHGX(NX(2)),0.D+0 ),
+     &  1.D+0 )
+!
+!---  Convergence check  ---
+!
+      IF( ABS(DYMHGX(1)).GT.1.D-7 ) GOTO 510
+      IF( ABS(DYMHGX(2)).GT.1.D-7 ) GOTO 510
+      EXIT SLOOP
+      ENDDO SLOOP
+!
+!---  Converged solution, set interpretation concentrations 
+!     to actuals  ---
+!
+      ZMIH_HT(1) = YMHGX(1)
+      ZMIH_HT(2) = YMHGX(2)
+      ZMIH_HT(3) = YMHGX(3)
+!
+!---  Hydrate equilibrium pressure and hydrate composition at 
+!     temperature, vapor mole fraction of formers, and inhibitor
+!     concentration  ---
+!
+      CALL HYD_P( TKX,YMHGX,XLSX,PEQHX )
+      CALL HYD_C( TKX,YMHGX,XLSX,RHOHX,XHAX,XHOX,XHNX,XHWX,
+     &    XMHAX,XMHOX,XMHNX,XMHWX )
+      PVHX = PEQHX
+      PVHAX = PVHX*YMHGX(1)
+      PVHOX = PVHX*YMHGX(2)
+      PVHNX = PVHX*YMHGX(3)
+!
+!---  Hydrate properties for no-hydrate conditions  ---
+!
+      TMHAX = SHX*RHOHX*XHAX
+      TMHOX = SHX*RHOHX*XHOX
+      TMHNX = SHX*RHOHX*XHNX
+      YMHGAX = YMHGX(1)
+      YMHGOX = YMHGX(2)
+      YMHGNX = YMHGX(3)
+      TEQHX = TKX
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_IC3 group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_IC4( PEQHX,PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,
+     &  PSOX,PVAX,PVHAX,PVNX,PVHNX,PVOX,PVHOX,PVWX,RHOHX,
+     &  SHX,SIX,SGX,SLX,SNX,TX,TCRX,TCTX,TEQHX,TMHAX,TMHNX,TMHOX,
+     &  XHAX,XHNX,XHOX,XHWX,XLSX,YLSX,YMGAX,YMGNX,YMGOX,YMHGAX,YMHGNX,
+     &  YMHGOX,ZMCAX,ZMCNX,ZMCOX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for initial condition #4
+!
+!     SHX > 0.0
+!     SGX + SNX > 0.0
+!     SLX < 1.0
+!
+!     Input variables:
+!
+!     TX - temperature, C
+!     PX - system pressure, absolute Pa (input as PX)
+!     SLX - aqueous saturation (input as SLX)
+!     YMMX(1) - mobile CO2 mole fraction of formers (input as PVAX )
+!     YMMX(2) - mobile CH4 mole fraction of formers (input as PVOX )
+!     YMMX(3) - mobile N2 mole fraction of formers (input as PVNX )
+!     SHX - hydrate saturation
+!     YMHX(1) - hydrate CO2 mole fraction of formers (input as PVHAX)
+!     YMHX(2) - hydrate CH4 mole fraction of formers (input as PVHOX)
+!     YMHX(3) - hydrate N2 mole fraction of formers (input as PVHNX)
+!     IZN - rock/soil zonation number
+!     N - node number
+!     IZN - rock/soil zonation number
+!     N - node number
+!
+!     Output variables:
+!
+!     PGX - gas pressure, guage Pa
+!     PIX - ice pressure, guage Pa
+!     PNX - nonaqueous liquid pressure, guage Pa
+!     PSBX - saturated brine vapor pressure, absolute Pa
+!     PVAX - mobile CO2 vapor pressure, absolute Pa
+!     PVHAX - hydrate CO2 vapor pressure, absolute Pa
+!     PVOX - mobile CH4 vapor pressure, absolute Pa
+!     PVHOX - hydrate CH4 vapor pressure, absolute Pa
+!     PVNX - mobile N2 vapor pressure, absolute Pa
+!     PVHNX - hydrate N2 vapor pressure, absolute Pa
+!     PVWX - water vapor pressure, absolute Pa
+!     RHOHX - hydrate density, kg/m^3
+!     RKGX - gas relative permeability
+!     RKLX - aqueous relative permeability tensor
+!     RKNX - nonaqueous liquid relative permeability
+!     SHX - hydrate saturation
+!     SIX - ice saturation
+!     SGX - gas saturation
+!     SLX - aqueous saturation
+!     SNX - nonaqueous liquid saturation
+!     TEQHX - hydrate equilibrium temperature, K
+!     TMHAX - total CO2 hydrate mass, kg
+!     TMHNX - total N2 hydrate mass, kg
+!     TMHOX - total CH4 hydrate mass, kg
+!     XHAX - CO2 hydrate mass fraction
+!     XHNX - N2 hydrate mass fraction
+!     XNOX - CH4 hydrate mass fraction
+!     XNWX - water hydrate mass fraction
+!     XLSX - dissolved salt aqueous mass fraction
+!     YLSX - total salt aqueous mass fraction
+!     YMGAX - CO2 mole fraction of mobile formers
+!     YMHGAX - CO2 mole fraction of hydrate formers
+!     YMGOX - CH4 mole fraction of mobile formers
+!     YMHGOX - CH4 mole fraction of hydrate formers
+!     ZMCAX - CO2 mole fraction of nonaqueous components
+!     ZMCNX - N2 mole fraction of nonaqueous components
+!     ZMCOX - CH4 mole fraction of nonaqueous components
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 17 September 2010.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE PORMED
+      USE NAPL
+      USE HYST
+      USE HYDT
+      USE GRID
+      USE FDVP
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 AIX(LHF_HT),ZMCX(LHF_HT),ZMCY(LHF_HT),DZMCX(LHF_HT)
+      REAL*8 XMGX(LHF_HT)
+      REAL*8 XMNX(LHF_HT),XMLX(LHF_HT),YMMX(LHF_HT),YMMY(LHF_HT)
+      REAL*8 YMHX(LHF_HT)
+      REAL*8 YMHGX(LHF_HT),YMHGY(LHF_HT),XMHX(LHF_HT),DYMHGX(LHF_HT)
+      REAL*8 FUGLX(LHF_HT),FUGX(LHF_HT)
+      REAL*8 FKX(LHF_HT),FKLX(LHF_HT),FKUX(LHF_HT)
+      REAL*8 AJ(2,2),BJ(2),GX(2,3)
+      INTEGER IJ(2),NX(3)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_IC4'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PX = PSOX + PATM
+      PGX = PSOX
+!
+!---  Assign aqueous CO2, CH4, and N2 mole fraction of formers,
+!     nonaqueous liquid saturation, and gas saturation  ---
+!
+      YMMX(1) = MIN( MAX( PVAX,0.D+0 ),1.D+0 )
+      YMMX(2) = MIN( MAX( PVOX,0.D+0 ),1.D+0 )
+      YMMX(3) = MIN( MAX( PVNX,0.D+0 ),1.D+0 )
+      SLX = MIN( MAX( SLX,0.D+0 ),1.D+0 )
+!
+!---  Assign hydrate CO2, CH4, and N2 mole fraction of formers  ---
+!
+      YMHX(1) = MIN( MAX( PVHAX,0.D+0 ),1.D+0 )
+      YMHX(2) = MIN( MAX( PVHOX,0.D+0 ),1.D+0 )
+      YMHX(3) = MIN( MAX( PVHNX,0.D+0 ),1.D+0 )
+!
+!---  Peng-Robinson temperature dependent component 
+!     coefficients  ---
+!
+      CALL PRC_T( AIX,TKX )
+!
+!---  Brine salt mass fraction  ---
+!      
+      CALL SOL_LS( TX,XLSMX )
+      XLSX = MIN( YLSX,XLSMX )
+!
+!---  Interfacial surface tensions  ---
+!
+      SIG_GL = SCHR(5,IZN)
+      SIG_NL = SCHR(6,IZN)
+      SIG_GN = SCHR(7,IZN)
+      SIG_HL = SCHR(9,IZN)
+      SIG_IL = SCHR(9,IZN)
+      IF( ISLC(7).EQ.2 .OR. ISLC(7).EQ.3 )
+     &  CALL SFT_L( TX,XLSX,SIG_GL )
+      CA_NL = ((SIG_NL**2) - (SIG_GN**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_NL)
+      CA_GN = ((SIG_GN**2) - (SIG_NL**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_GN)
+!
+!---  Interphase scaling factors  ---
+!
+      BGL = SCHR(8,IZN)/SIG_GL
+      BNL = SCHR(8,IZN)/(SIG_NL*CA_NL)
+      BGN = SCHR(8,IZN)/(SIG_GN*CA_GN)
+      BHL = SCHR(8,IZN)/SIG_HL
+      BIL = SCHR(8,IZN)/SIG_HL
+!
+!---  Entry pressure without hydrate barrier adjustment  ---
+!
+      ENPR = SCHR(2,IZN)*RHORL*GRAV
+!
+!---  Nonaqueous saturation  ---
+!
+      SIX = 0.D+0
+      SGNX = 1.D+0 - SHX - SIX - SLX
+      IF( SGNX.LE.0.D+0 ) THEN
+        INDX = 11
+        RLMSG = SGNX
+        CHMSG = 'FLH_IC4: Zero Nonaqueous Saturation: ' // 
+     &    'SG + SN = '
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Vapor pressure  ---
+!
+      CALL SP_B( TX,XLSX,PSBX )
+      CALL VPL( PSBX,PVWX,SLX,TX,IZN )
+      PVX = PX-PVWX
+!
+!---  Guess the nonaqueous component concentrations  ---
+!
+      ZMCX(1) = YMMX(1)
+      ZMCX(2) = YMMX(2)
+      ZMCX(3) = YMMX(3)
+!
+!---  Two-variable Newton-Raphson loop: gas mole fractions  ---
+!
+      NC = 0
+  110 CONTINUE
+      NC = NC + 1
+      IF( NC.GT.32 ) THEN
+        INDX = 17
+        CHMSG = 'FLH_IC4: Unconverged Nonaqueous Mole Fraction' // 
+     &    ' of Components'
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Primary variable switching scheme, selecting the components
+!     with the lowest concentrations  ---
+!
+      IF( ZMCX(3).GE.MAX( ZMCX(1),ZMCX(2) ) ) THEN
+        NX(1) = 1
+        NX(2) = 2
+        NX(3) = 3
+      ELSEIF( ZMCX(1).GE.MAX( ZMCX(2),ZMCX(3) ) ) THEN
+        NX(1) = 2
+        NX(2) = 3
+        NX(3) = 1
+      ELSE
+        NX(1) = 3
+        NX(2) = 1
+        NX(3) = 2
+      ENDIF
+      DO 130 M = 1,3
+        DO 120 NF = 1,2
+          ZMCY(NX(NF)) = ZMCX(NX(NF))
+          DZMCX(NF) = SIGN( 1.D-6,5.D-1-ZMCX(NX(NF)) )
+  120   CONTINUE
+        IF( M.EQ.2 ) ZMCY(NX(1)) = ZMCX(NX(1)) + DZMCX(1)
+        IF( M.EQ.3 ) ZMCY(NX(2)) = ZMCX(NX(2)) + DZMCX(2)
+        ZMCY(NX(3)) = MIN( MAX( 1.D+0-ZMCY(NX(1))-ZMCY(NX(2)),0.D+0 ),
+     &    1.D+0 )
+!
+!---    Determine phase state of nonaqueous phases  ---
+!
+        CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCY,NP_HT )
+!
+!---    Nonaqueous gas phase  ---
+!
+        IF( NP_HT.EQ.0 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGX(1) = ZMCY(1)
+          XMGX(2) = ZMCY(2)
+          XMGX(3) = ZMCY(3)
+!
+!---      Liquid mole fractions ---
+!
+          XMNX(1) = ZMCY(1)
+          XMNX(2) = ZMCY(2)
+          XMNX(3) = ZMCY(3)
+!
+!---    Nonaqueous liquid phase  ---
+!
+        ELSEIF( NP_HT.EQ.1 ) THEN
+          BTX = 0.D+0
+!
+!---      Liquid mole fractions ---
+!
+          XMNX(1) = ZMCY(1)
+          XMNX(2) = ZMCY(2)
+          XMNX(3) = ZMCY(3)
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKX )
+!
+!---      Gas mole fractions ---
+!
+          XMGX(1) = FKX(1)*ZMCY(1)
+          XMGX(2) = FKX(2)*ZMCY(2)
+          XMGX(3) = FKX(3)*ZMCY(3)
+          SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+          XMGX(1) = XMGX(1)/SXMGX
+          XMGX(2) = XMGX(2)/SXMGX
+          XMGX(3) = XMGX(3)/SXMGX        
+!
+!---    Nonaqueous two-phase  ---
+!
+        ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---      K-factors and beta within the two-phase envelope  ---
+!
+!
+!---      K-factors at the lower pressure envelope  ---
+!
+          CALL KF_LPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---      Normalized liquid mole fractions at the lower pressure
+!         envelope  ---
+!
+          XMNX(1) = ZMCY(1)/FKLX(1)
+          XMNX(2) = ZMCY(2)/FKLX(2)
+          XMNX(3) = ZMCY(3)/FKLX(3)
+          SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+          XMNX(1) = XMNX(1)/SXMNX
+          XMNX(2) = XMNX(2)/SXMNX
+          XMNX(3) = XMNX(3)/SXMNX
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKUX )
+!
+!---      Normalized gas mole fractions at the upper pressure
+!         envelope  ---
+!
+          XMGX(1) = ZMCY(1)*FKUX(1)
+          XMGX(2) = ZMCY(2)*FKUX(2)
+          XMGX(3) = ZMCY(3)*FKUX(3)
+          SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+          XMGX(1) = XMGX(1)/SXMGX
+          XMGX(2) = XMGX(2)/SXMGX
+          XMGX(3) = XMGX(3)/SXMGX
+!
+!---      Beta within the two-phase envelope  ---
+!
+          CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCY )
+!
+!---      Gas mole fractions ---
+!
+          XMGX(1) = BTX*ZMCY(1) + (1.D+0-BTX)*XMGX(1)
+          XMGX(2) = BTX*ZMCY(2) + (1.D+0-BTX)*XMGX(2)
+          XMGX(3) = BTX*ZMCY(3) + (1.D+0-BTX)*XMGX(3)
+!
+!---     Liquid mole fractions ---
+!
+          XMNX(1) = BTX*XMNX(1) + (1.D+0-BTX)*ZMCY(1)
+          XMNX(2) = BTX*XMNX(2) + (1.D+0-BTX)*ZMCY(2)
+          XMNX(3) = BTX*XMNX(3) + (1.D+0-BTX)*ZMCY(3)
+!
+!---    Upper-phase-envelope-gas phase  ---
+!
+        ELSEIF( NP_HT.EQ.3 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGX(1) = ZMCY(1)
+          XMGX(2) = ZMCY(2)
+          XMGX(3) = ZMCY(3)
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKUX )
+!
+!---      Normalized liquid mole fractions at the upper pressure
+!         envelope  ---
+!
+          XMNX(1) = ZMCY(1)/FKUX(1)
+          XMNX(2) = ZMCY(2)/FKUX(2)
+          XMNX(3) = ZMCY(3)/FKUX(3)
+          SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+          XMNX(1) = XMNX(1)/SXMNX
+          XMNX(2) = XMNX(2)/SXMNX
+          XMNX(3) = XMNX(3)/SXMNX
+!
+!---    Lower-phase-envelope-gas phase  ---
+!
+        ELSEIF( NP_HT.EQ.4 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGX(1) = ZMCY(1)
+          XMGX(2) = ZMCY(2)
+          XMGX(3) = ZMCY(3)
+!
+!---      K-factors at the lower pressure envelope  ---
+!
+          CALL KF_LPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---      Normalized liquid mole fractions at the lower pressure
+!         envelope  ---
+!
+          XMNX(1) = ZMCY(1)/FKLX(1)
+          XMNX(2) = ZMCY(2)/FKLX(2)
+          XMNX(3) = ZMCY(3)/FKLX(3)
+          SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+          XMNX(1) = XMNX(1)/SXMNX
+          XMNX(2) = XMNX(2)/SXMNX
+          XMNX(3) = XMNX(3)/SXMNX
+        ENDIF
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,XMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,XMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,XMGX,ZGX )
+!
+!---    CO2 solubility ---
+!
+        FUGAX = FUGX(1)*PVX*XMGX(1)
+        CALL SOL_LA( TX,FUGAX,XLSX,XMLX(1) )
+!
+!---    CH4 solubility ---
+!
+        FUGOX = FUGX(2)*PVX*XMGX(2)
+        CALL SOL_LO( TX,FUGOX,XLSX,XMLX(2) )
+!
+!---    N2 solubility ---
+!
+        FUGNX = FUGX(3)*PVX*XMGX(3)
+        CALL SOL_LN( TX,FUGNX,XLSX,XMLX(3) )
+!
+!---    Aqueous molecular weight ---
+!
+        WTMLX = (XMLX(1)*WTMA + XMLX(2)*WTMO + XMLX(3)*WTMN +
+     &    WTMW*(1.D+0-XMLX(1)-XMLX(2)-XMLX(3)))/
+     &    (1.D+0-XLSX+WTMW*XLSX/WTMS)
+        PPLX = MAX( PX,PSBX )
+        CALL DENS_B( TX,PPLX,XLSX,RHOBX )
+        XLAX = XMLX(1)*WTMA/WTMLX
+        XLOX = XMLX(2)*WTMO/WTMLX
+        XLNX = XMLX(3)*WTMN/WTMLX
+        CALL DENS_L( TX,RHOBX,XLAX,XLOX,XLNX,RHOLX )
+!
+!---    Aqueous molar density ---
+!
+        RHOMLX = RHOLX/WTMLX
+!
+!---    Gas molar density ---
+!
+        ISRX = 2
+        CALL DENS_W( TX,PVWX,RHOX,RHOGWX,ISRX )
+        RHOMGWX = RHOGWX/WTMW
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNX = PVX/(ZNX*TKX*RCU)
+!
+!---    Volume fraction of gas  ---
+!
+        STX = (BTX/RHOMGCX)/((BTX/RHOMGCX) + ((1.D+0-BTX)/RHOMNX))
+!
+!---    Mole fraction of components ---
+!
+        YMMY(1) = SLX*XMLX(1)*RHOMLX + SGNX*(STX*XMGX(1)*RHOMGCX +
+     &    (1.D+0-STX)*XMNX(1)*RHOMNX)
+        YMMY(2) = SLX*XMLX(2)*RHOMLX + SGNX*(STX*XMGX(2)*RHOMGCX +
+     &    (1.D+0-STX)*XMNX(2)*RHOMNX)
+        YMMY(3) = SLX*XMLX(3)*RHOMLX + SGNX*(STX*XMGX(3)*RHOMGCX +
+     &    (1.D+0-STX)*XMNX(3)*RHOMNX)
+        SYMMY = YMMY(1)+YMMY(2)+YMMY(3)
+!
+!---    Residual equations ---
+!
+        GX(1,M) = YMMX(NX(1)) - YMMY(NX(1))/(SYMMY+SMALL)
+        GX(2,M) = YMMX(NX(2)) - YMMY(NX(2))/(SYMMY+SMALL)
+  130 CONTINUE
+!
+!---  Load solution vector and Jacobian matrix for
+!     two-phase conditions  ---
+!
+      DO 140 M = 1,2
+        AJ(M,1) = (GX(M,2)-GX(M,1))/DZMCX(1)
+        AJ(M,2) = (GX(M,3)-GX(M,1))/DZMCX(2)
+        BJ(M) = -GX(M,1)
+ 140  CONTINUE
+!
+!---  Solve linear system  ---
+!
+      JP = 2
+      KP = 2
+      CALL LUDCMP( AJ,JP,KP,IJ,DJ )
+      CALL LUBKSB( AJ,JP,KP,IJ,BJ )
+!
+!---  Update primary unknowns  ---
+!
+      DO 150 NF = 1,2
+        DZMCX(NF) = SIGN( MIN( 5.D-2,ABS(BJ(NF)) ),BJ(NF) )
+        IF( YMMX(NX(NF))/EPSL.LT.EPSL ) THEN
+          ZMCX(NX(NF)) = 0.D+0
+          DZMCX(NF) = 0.D+0
+        ELSEIF( ZMCX(NX(NF))/EPSL.LT.EPSL 
+     &    .AND. DZMCX(NF).LT.0.D+0 ) THEN
+          ZMCX(NX(NF)) = 0.D+0
+          DZMCX(NF) = 0.D+0
+        ELSE
+          ZMCX(NX(NF)) = ZMCX(NX(NF)) + DZMCX(NF)
+          ZMCX(NX(NF)) = MAX( MIN( ZMCX(NX(NF)),1.D+0 ),0.D+0 )
+        ENDIF
+  150 CONTINUE
+      SZMCX = ZMCX(NX(1))+ZMCX(NX(2))
+      IF( (SZMCX-1.D+0).GT.0.D+0 ) THEN
+        ZMCX(NX(1)) = ZMCX(NX(1))/SZMCX
+        ZMCX(NX(2)) = ZMCX(NX(2))/SZMCX
+      ENDIF
+      ZMCX(NX(3)) = MIN( MAX( 1.D+0-ZMCX(NX(1))-ZMCX(NX(2)),0.D+0 ),
+     &  1.D+0 )
+!
+!---  Convergence check  ---
+!
+      IF( ABS(DZMCX(1)).GT.1.D-9 ) GOTO 110
+      IF( ABS(DZMCX(2)).GT.1.D-9 ) GOTO 110
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---  Nonaqueous liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+        BTX = 0.D+0
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = FKX(1)*ZMCX(1)
+        XMGX(2) = FKX(2)*ZMCX(2)
+        XMGX(3) = FKX(3)*ZMCX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX        
+!
+!---  Nonaqueous two-phase  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKLX(1)
+        XMNX(2) = ZMCX(2)/FKLX(2)
+        XMNX(3) = ZMCX(3)/FKLX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized gas mole fractions at the upper pressure
+!       envelope  ---
+!
+        XMGX(1) = ZMCX(1)*FKUX(1)
+        XMGX(2) = ZMCX(2)*FKUX(2)
+        XMGX(3) = ZMCX(3)*FKUX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX
+!
+!---    Beta within the two-phase envelope  ---
+!
+        CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = BTX*ZMCX(1) + (1.D+0-BTX)*XMGX(1)
+        XMGX(2) = BTX*ZMCX(2) + (1.D+0-BTX)*XMGX(2)
+        XMGX(3) = BTX*ZMCX(3) + (1.D+0-BTX)*XMGX(3)
+!
+!---   Liquid mole fractions ---
+!
+        XMNX(1) = BTX*XMNX(1) + (1.D+0-BTX)*ZMCX(1)
+        XMNX(2) = BTX*XMNX(2) + (1.D+0-BTX)*ZMCX(2)
+        XMNX(3) = BTX*XMNX(3) + (1.D+0-BTX)*ZMCX(3)
+      ENDIF
+!
+!---  Peng-Robinson gas mixture coefficients  ---
+!
+      CALL PRC_X( AGX,AIX,BGX,XMGX )
+!
+!---  Peng-Robinson gas compressibility ---
+!
+      INDX = 1
+      CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---  Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+      CALL PRC_X( ANX,AIX,BNX,XMNX )
+!
+!---  Peng-Robinson nonaqueous-liquid compressibility ---
+!
+      INDX = 2
+      CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---  Peng-Robinson gas component fugacities ---
+!
+      CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,XMGX,ZGX )
+!
+!---  CO2 solubility ---
+!
+      FUGAX = FUGX(1)*PVX*XMGX(1)
+      CALL SOL_LA( TX,FUGAX,XLSX,XMLX(1) )
+!
+!---  CH4 solubility ---
+!
+      FUGOX = FUGX(2)*PVX*XMGX(2)
+      CALL SOL_LO( TX,FUGOX,XLSX,XMLX(2) )
+!
+!---  N2 solubility ---
+!
+      FUGNX = FUGX(3)*PVX*XMGX(3)
+      CALL SOL_LN( TX,FUGNX,XLSX,XMLX(3) )
+!
+!---  Aqueous molecular weight ---
+!
+      WTMLX = (XMLX(1)*WTMA + XMLX(2)*WTMO + XMLX(3)*WTMN +
+     &  WTMW*(1.D+0-XMLX(1)-XMLX(2)-XMLX(3)))/
+     &  (1.D+0-XLSX+WTMW*XLSX/WTMS)
+      PPLX = MAX( PX,PSBX )
+      CALL DENS_B( TX,PPLX,XLSX,RHOBX )
+      XLAX = XMLX(1)*WTMA/WTMLX
+      XLOX = XMLX(2)*WTMO/WTMLX
+      XLNX = XMLX(3)*WTMN/WTMLX
+      CALL DENS_L( TX,RHOBX,XLAX,XLOX,XLNX,RHOLX )
+!
+!---  Aqueous molar density ---
+!
+      RHOMLX = RHOLX/WTMLX
+!
+!---  Gas molar density ---
+!
+      ISRX = 2
+      CALL DENS_W( TX,PVWX,RHOX,RHOGWX,ISRX )
+      RHOMGWX = RHOGWX/WTMW
+      RHOMGCX = PVX/(ZGX*TKX*RCU)
+      RHOMGX = RHOMGCX + RHOMGWX
+!
+!---  Nonaqueous-liquid molar density ---
+!
+      RHOMNX = PVX/(ZNX*TKX*RCU)
+!
+!---  Volume fraction of gas  ---
+!
+      STX = (BTX/RHOMGCX)/((BTX/RHOMGCX) + ((1.D+0-BTX)/RHOMNX))
+      SGX = STX*SGNX*(1.D+0-SHX)
+      SNX = (1.D+0-STX)*SGNX*(1.D+0-SHX)
+      SLIX = SLX + SIX
+      CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+      PNX = PGX - CPGNX
+      PLX = PGX - CPGLX
+!
+!---  Ice pressure  ---
+!
+      CALL ICE( TX,PLX,XLSX,TFPX,PIX )
+!
+!---  Ice saturation  ---
+!
+      CALL SP_HYDT_KE( PIX,PLX,PNX,SHX,SIX,SLX,IZN,N )
+!
+!---  Aqueous, gas, and nonaqueous liquid mole fractions  ---
+!
+      XMLAX = XMLX(1)
+      XMLOX = XMLX(2)
+      XMLNX = XMLX(3)
+      YMGAX = XMGX(1)
+      YMGOX = XMGX(2)
+      YMGNX = XMGX(3)
+      XMNAX = XMNX(1)
+      XMNOX = XMNX(2)
+      XMNNX = XMNX(3)
+      ZMCAX = ZMCX(1)
+      ZMCOX = ZMCX(2)
+      ZMCNX = ZMCX(3)
+!
+!---  Component vapor pressures  ---
+!
+      PVAX = PVX*YMGAX
+      PVOX = PVX*YMGOX
+      PVNX = PVX*YMGNX
+!
+!---  Try Ruprecht guess scheme first then least square root error
+!     scheme next  ---
+!
+      SLOOP : DO ISCMX = 1,2
+      IF( ISCMX.EQ.1 ) THEN      
+!
+!---  Ruprecht guess scheme  ---
+!
+      YMHGX(1) = 0.64*YMHX(1)
+      YMHGX(2) = 0.62*YMHX(2)
+      YMHGX(3) = 1.D+0 - YMHGX(1) - YMHGX(2)
+      IF( YMHGX(3).LT.EPSL ) YMHGX(3) = 0.D+0
+      IF( YMHX(1)/EPSL.LT.EPSL .AND. YMHX(2)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 0.D+0
+        YMHGX(2) = 0.D+0
+        YMHGX(3) = 1.D+0
+      ELSEIF( YMHX(2)/EPSL.LT.EPSL .AND. YMHX(3)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 1.D+0
+        YMHGX(2) = 0.D+0
+        YMHGX(3) = 0.D+0
+      ELSEIF( YMHX(1)/EPSL.LT.EPSL .AND. YMHX(3)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 0.D+0
+        YMHGX(2) = 1.D+0
+        YMHGX(3) = 0.D+0
+      ELSEIF( YMHX(1)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 0.D+0
+        VARX = (YMHGX(2)+YMHGX(3))
+        YMHGX(2) = YMHGX(2)/VARX
+        YMHGX(3) = YMHGX(3)/VARS
+      ELSEIF( YMHX(2)/EPSL.LT.EPSL ) THEN
+        VARX = (YMHGX(1)+YMHGX(3))
+        YMHGX(1) = YMHGX(1)/VARX
+        YMHGX(2) = 0.D+0
+        YMHGX(3) = YMHGX(3)/VARX
+      ELSEIF( YMHX(3)/EPSL.LT.EPSL ) THEN
+        VARX = (YMHGX(1)+YMHGX(2))
+        YMHGX(1) = YMHGX(1)/VARX
+        YMHGX(2) = YMHGX(2)/VARX
+        YMHGX(3) = 0.D+0
+      ENDIF
+      ELSE
+!
+!---  Initial guesses of hydrate-gas mole fraction of formers  ---
+!
+      RMX = 1.D+20
+      IX = 0
+      JX = 0
+      DO J = 1,21
+        DO I = 1,22-J
+          YMHGX(1) = REAL(I-1)*5.D-2
+          YMHGX(2) = REAL(J-1)*5.D-2
+          YMHGX(3) = 1.D+0 - YMHGX(1) - YMHGX(2)
+          IF( YMHGX(3).LT.EPSL ) YMHGX(3) = 0.D+0
+!
+!---      Set interpretation concentrations to actuals  ---
+!
+          ZMIH_HT(1) = YMHGX(1)
+          ZMIH_HT(2) = YMHGX(2)
+          ZMIH_HT(3) = YMHGX(3)
+!
+!---      Hydrate composition at temperature and vapor mole fraction
+!         of formers  ---
+!
+          CALL HYD_X( TKX,YMHGX,XLSX,RHOHX,
+     &      XHAX,XHOX,XHNX,XHWX,XMHAX,XMHOX,XMHNX,XMHWX )
+          XMHX(1) = XMHAX
+          XMHX(2) = XMHOX
+          XMHX(3) = XMHNX
+!
+!---      Residual equations ---
+!
+          SXMHX = XMHX(1) + XMHX(2) + XMHX(3)
+          YMHAX = XMHX(1)/(SXMHX+SMALL)
+          YMHOX = XMHX(2)/(SXMHX+SMALL)
+          YMHNX = XMHX(3)/(SXMHX+SMALL)
+          GX(1,1) = YMHX(1) - XMHX(1)/(SXMHX+SMALL)
+          GX(1,2) = YMHX(2) - XMHX(2)/(SXMHX+SMALL)
+          GX(1,3) = YMHX(3) - XMHX(3)/(SXMHX+SMALL)
+          RX = SQRT( (GX(1,1)**2) + (GX(1,2)**2) + (GX(1,3)**2) )
+          IF( RX.LT.RMX ) THEN
+            RMX = RX
+            IX = I
+            JX = J
+          ENDIF
+        ENDDO
+      ENDDO
+      YMHGX(1) = REAL(IX-1)*5.D-2
+      YMHGX(2) = REAL(JX-1)*5.D-2
+      YMHGX(3) = 1.D+0 - YMHGX(1) - YMHGX(2)
+      IF( YMHGX(3).LT.EPSL ) YMHGX(3) = 0.D+0
+      ENDIF
+!
+!---  Set interpretation concentrations to actuals  ---
+!
+      ZMIH_HT(1) = YMHGX(1)
+      ZMIH_HT(2) = YMHGX(2)
+      ZMIH_HT(3) = YMHGX(3)
+!
+!---  Two-variable Newton-Raphson loop: 
+!     hydrate mole fractions  ---
+!
+      NC = 0
+  310 CONTINUE
+      NC = NC + 1
+      IF( NC.GT.32 ) THEN
+        IF( ISCMX.EQ.1 ) CYCLE SLOOP
+        INDX = 17
+        CHMSG = 'FLH_IC4: Unconverged Hydrate-Gas Mole Fraction of ' //
+     &    'Formers'
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Primary variable switching scheme, selecting the components
+!     with the lowest concentrations  ---
+!
+      IF( YMHGX(3).GE.MAX( YMHGX(1),YMHGX(2) ) ) THEN
+        NX(1) = 1
+        NX(2) = 2
+        NX(3) = 3
+      ELSEIF( YMHGX(1).GE.MAX( YMHGX(2),YMHGX(3) ) ) THEN
+        NX(1) = 2
+        NX(2) = 3
+        NX(3) = 1
+      ELSE
+        NX(1) = 3
+        NX(2) = 1
+        NX(3) = 2
+      ENDIF
+      DO 330 M = 1,3
+        DO 320 NF = 1,2
+          YMHGY(NX(NF)) = YMHGX(NX(NF))
+          DYMHGX(NF) = SIGN( 1.D-6,5.D-1-YMHGX(NX(NF)) )
+  320   CONTINUE
+        IF( M.EQ.2 ) YMHGY(NX(1)) = YMHGX(NX(1)) + DYMHGX(1)
+        IF( M.EQ.3 ) YMHGY(NX(2)) = YMHGX(NX(2)) + DYMHGX(2)
+        YMHGY(NX(3)) = MIN( MAX( 1.D+0-YMHGY(NX(1))-YMHGY(NX(2)),
+     &    0.D+0 ),1.D+0 )
+!
+!---    Hydrate equilibrium pressure and hydrate composition at 
+!       temperature, vapor mole fraction of formers, and inhibitor
+!       concentration  ---
+!
+        CALL HYD_P( TKX,YMHGY,XLSX,PEQHX )
+        CALL HYD_C( TKX,YMHGY,XLSX,RHOHX,XHAX,XHOX,XHNX,XHWX,
+     &    XMHAX,XMHOX,XMHNX,XMHWX )
+        XMHX(1) = XMHAX
+        XMHX(2) = XMHOX
+        XMHX(3) = XMHNX
+!
+!---    Residual equations ---
+!
+        SXMHX = XMHX(1) + XMHX(2) + XMHX(3)
+        GX(1,M) = YMHX(NX(1)) - XMHX(NX(1))/(SXMHX+SMALL)
+        GX(2,M) = YMHX(NX(2)) - XMHX(NX(2))/(SXMHX+SMALL)
+  330 CONTINUE
+!
+!---  Load solution vector and Jacobian matrix for
+!     two-phase conditions  ---
+!
+      DO 340 M = 1,2
+        AJ(M,1) = (GX(M,2)-GX(M,1))/DYMHGX(1)
+        AJ(M,2) = (GX(M,3)-GX(M,1))/DYMHGX(2)
+        BJ(M) = -GX(M,1)
+ 340  CONTINUE
+!
+!---  Solve linear system  ---
+!
+      IF( ABS(AJ(1,1))/EPSL.LT.EPSL .OR. ABS(AJ(1,1))/EPSL.LT.EPSL )
+     &  CYCLE SLOOP
+      JP = 2
+      KP = 2
+      CALL LUDCMP( AJ,JP,KP,IJ,DJ )
+      CALL LUBKSB( AJ,JP,KP,IJ,BJ )
+!
+!---  Update primary unknowns  ---
+!
+      DO 350 NF = 1,2
+        DYMHGX(NF) = SIGN( MIN( 5.D-2,ABS(BJ(NF)) ),BJ(NF) )
+        IF( YMHX(NX(NF))/EPSL.LT.EPSL ) THEN
+          YMHGX(NX(NF)) = 0.D+0
+          DYMHGX(NF) = 0.D+0
+        ELSEIF( YMHGX(NX(NF))/EPSL.LT.EPSL 
+     &    .AND. DYMHGX(NF).LT.0.D+0 ) THEN
+          YMHGX(NX(NF)) = 0.D+0
+          DYMHGX(NF) = 0.D+0
+        ELSE
+          YMHGX(NX(NF)) = YMHGX(NX(NF)) + DYMHGX(NF)
+          YMHGX(NX(NF)) = MAX( MIN( YMHGX(NX(NF)),1.D+0 ),0.D+0 )
+        ENDIF
+  350 CONTINUE
+      SYMHGX = YMHGX(NX(1))+YMHGX(NX(2))
+      IF( (SYMHGX-1.D+0).GT.0.D+0 ) THEN
+        YMHGX(NX(1)) = YMHGX(NX(1))/SYMHGX
+        YMHGX(NX(2)) = YMHGX(NX(2))/SYMHGX
+      ENDIF
+      YMHGX(NX(3)) = MIN( MAX( 1.D+0-YMHGX(NX(1))-YMHGX(NX(2)),0.D+0 ),
+     &  1.D+0 )
+!
+!---  Convergence check  ---
+!
+      IF( ABS(DYMHGX(1)).GT.1.D-7 ) GOTO 310
+      IF( ABS(DYMHGX(2)).GT.1.D-7 ) GOTO 310
+      EXIT SLOOP
+      ENDDO SLOOP
+!
+!---  Converged solution, set interpretation concentrations 
+!     to actuals  ---
+!
+      ZMIH_HT(1) = YMHGX(1)
+      ZMIH_HT(2) = YMHGX(2)
+      ZMIH_HT(3) = YMHGX(3)
+!
+!---  Hydrate equilibrium pressure and hydrate composition at 
+!     temperature, vapor mole fraction of formers, and inhibitor
+!     concentration  ---
+!
+      CALL HYD_P( TKX,YMHGX,XLSX,PEQHX )
+      CALL HYD_C( TKX,YMHGX,XLSX,RHOHX,XHAX,XHOX,XHNX,XHWX,
+     &    XMHAX,XMHOX,XMHNX,XMHWX )
+      PVHX = PEQHX
+      PVHAX = PVHX*YMHGX(1)
+      PVHOX = PVHX*YMHGX(2)
+      PVHNX = PVHX*YMHGX(3)
+!
+!---  Hydrate properties for no-hydrate conditions  ---
+!
+      TMHAX = SHX*RHOHX*XHAX
+      TMHOX = SHX*RHOHX*XHOX
+      TMHNX = SHX*RHOHX*XHNX
+      YMHGAX = YMHGX(1)
+      YMHGOX = YMHGX(2)
+      YMHGNX = YMHGX(3)
+      TEQHX = TKX
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_IC4 group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_IC5( PEQHX,PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,
+     &  PSOX,PVAX,PVHAX,PVNX,PVHNX,PVOX,PVHOX,PVWX,RHOHX,
+     &  SHX,SIX,SGX,SLX,SNX,TX,TCRX,TCTX,TEQHX,TMHAX,TMHNX,TMHOX,
+     &  XHAX,XHNX,XHOX,XHWX,XLSX,YLSX,YMGAX,YMGNX,YMGOX,YMHGAX,YMHGNX,
+     &  YMHGOX,ZMCAX,ZMCNX,ZMCOX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for initial condition #5
+!
+!     SHX > 0.0
+!     SGX + SNX >= 0.0
+!     SLX < 1.0
+!
+!     Hydrate-mobile phase equilibrium
+!
+!     Input variables:
+!
+!     TX - temperature, C
+!     SLX - aqueous saturation
+!     SHX - hydrate saturation
+!     YMHX(1) - hydrate CO2 mole fraction of formers (input as PVHAX)
+!     YMHX(2) - hydrate CH4 mole fraction of formers (input as PVHOX)
+!     YMHX(3) - hydrate N2 mole fraction of formers (input as PVHNX)
+!     IZN - rock/soil zonation number
+!     N - node number
+!
+!     Output variables:
+!
+!     PGX - gas pressure, guage Pa
+!     PIX - ice pressure, guage Pa
+!     PNX - nonaqueous liquid pressure, guage Pa
+!     PSBX - saturated brine vapor pressure, absolute Pa
+!     PVAX - mobile CO2 vapor pressure, absolute Pa
+!     PVHAX - hydrate CO2 vapor pressure, absolute Pa
+!     PVOX - mobile CH4 vapor pressure, absolute Pa
+!     PVHOX - hydrate CH4 vapor pressure, absolute Pa
+!     PVNX - mobile N2 vapor pressure, absolute Pa
+!     PVHNX - hydrate N2 vapor pressure, absolute Pa
+!     PVWX - water vapor pressure, absolute Pa
+!     RHOHX - hydrate density, kg/m^3
+!     RKGX - gas relative permeability
+!     RKLX - aqueous relative permeability tensor
+!     RKNX - nonaqueous liquid relative permeability
+!     SHX - hydrate saturation
+!     SIX - ice saturation
+!     SGX - gas saturation
+!     SLX - aqueous saturation
+!     SNX - nonaqueous liquid saturation
+!     TEQHX - hydrate equilibrium temperature, K
+!     TMHAX - total CO2 hydrate mass, kg
+!     TMHNX - total N2 hydrate mass, kg
+!     TMHOX - total CH4 hydrate mass, kg
+!     XHAX - CO2 hydrate mass fraction
+!     XHNX - N2 hydrate mass fraction
+!     XNOX - CH4 hydrate mass fraction
+!     XNWX - water hydrate mass fraction
+!     XLSX - dissolved salt aqueous mass fraction
+!     YLSX - total salt aqueous mass fraction
+!     YMGAX - CO2 mole fraction of mobile formers
+!     YMHGAX - CO2 mole fraction of hydrate formers
+!     YMGOX - CH4 mole fraction of mobile formers
+!     YMHGOX - CH4 mole fraction of hydrate formers
+!     ZMCAX - CO2 mole fraction of nonaqueous components
+!     ZMCNX - N2 mole fraction of nonaqueous components
+!     ZMCOX - CH4 mole fraction of nonaqueous components
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 18 August 2010.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE PORMED
+      USE NAPL
+      USE HYST
+      USE HYDT
+      USE GRID
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 AIX(LHF_HT),ZMCX(LHF_HT),ZMCY(LHF_HT),DZMCX(LHF_HT)
+      REAL*8 XMGX(LHF_HT),XMGY(LHF_HT)
+      REAL*8 XMNX(LHF_HT),XMLX(LHF_HT)
+      REAL*8 YMHX(LHF_HT)
+      REAL*8 YMHGX(LHF_HT),YMHGY(LHF_HT),XMHX(LHF_HT),DYMHGX(LHF_HT)
+      REAL*8 FUGLX(LHF_HT),FUGX(LHF_HT)
+      REAL*8 FKX(LHF_HT),FKLX(LHF_HT),FKUX(LHF_HT)
+      REAL*8 AJ(2,2),BJ(2),GX(2,3)
+      INTEGER IJ(2),NX(3)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_IC5'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+!
+!---  Assign hydrate CO2, CH4, and N2 mole fraction of formers  ---
+!
+      YMHX(1) = MIN( MAX( PVHAX,0.D+0 ),1.D+0 )
+      YMHX(2) = MIN( MAX( PVHOX,0.D+0 ),1.D+0 )
+      YMHX(3) = MIN( MAX( PVHNX,0.D+0 ),1.D+0 )
+!
+!---  Limit hydrate saturation  ---
+!
+      SHX = MIN( MAX( SHX,0.D+0 ),1.D+0 )
+      IF( SHX.LT.EPSL ) SHX = 0.D+0
+      SLX = MIN( MAX( SLX,0.D+0 ),1.D+0 )
+!
+!---  Check summation of total nonaqueous, hydrate and ice 
+!     saturations  ---
+!
+      SIX = 0.D+0
+      SGNX = 1.D+0-SLX-SHX-SIX
+      IF( SLX.LE.0.D+0 ) THEN
+        INDX = 11
+        RLMSG = SGNX
+        CHMSG = 'FLH_IC5: Zero Nonqueous Saturation: ' // 
+     &    'SNX + SGX = '
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Peng-Robinson temperature dependent component 
+!     coefficients  ---
+!
+      CALL PRC_T( AIX,TKX )
+
+!---  Brine salt mass fraction  ---
+!      
+      CALL SOL_LS( TX,XLSMX )
+      XLSX = MIN( YLSX,XLSMX )
+!
+!---  Interfacial surface tensions  ---
+!
+      SIG_GL = SCHR(5,IZN)
+      SIG_NL = SCHR(6,IZN)
+      SIG_GN = SCHR(7,IZN)
+      SIG_HL = SCHR(9,IZN)
+      SIG_IL = SCHR(9,IZN)
+      IF( ISLC(7).EQ.2 .OR. ISLC(7).EQ.3 )
+     &  CALL SFT_L( TX,XLSX,SIG_GL )
+      CA_NL = ((SIG_NL**2) - (SIG_GN**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_NL)
+      CA_GN = ((SIG_GN**2) - (SIG_NL**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_GN)
+!
+!---  Interphase scaling factors  ---
+!
+      BGL = SCHR(8,IZN)/SIG_GL
+      BNL = SCHR(8,IZN)/(SIG_NL*CA_NL)
+      BGN = SCHR(8,IZN)/(SIG_GN*CA_GN)
+      BHL = SCHR(8,IZN)/SIG_HL
+      BIL = SCHR(8,IZN)/SIG_HL
+!
+!---  Entry pressure without hydrate barrier adjustment  ---
+!
+      ENPR = SCHR(2,IZN)*RHORL*GRAV
+!
+!---  Try Ruprecht guess scheme first then least square root error
+!     scheme next  ---
+!
+      SLOOP : DO ISCMX = 1,2
+      IF( ISCMX.EQ.1 ) THEN      
+!
+!---  Ruprecht guess scheme  ---
+!
+      YMHGX(1) = 0.64*YMHX(1)
+      YMHGX(2) = 0.62*YMHX(2)
+      YMHGX(3) = 1.D+0 - YMHGX(1) - YMHGX(2)
+      IF( YMHGX(3).LT.EPSL ) YMHGX(3) = 0.D+0
+      IF( YMHX(1)/EPSL.LT.EPSL .AND. YMHX(2)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 0.D+0
+        YMHGX(2) = 0.D+0
+        YMHGX(3) = 1.D+0
+      ELSEIF( YMHX(2)/EPSL.LT.EPSL .AND. YMHX(3)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 1.D+0
+        YMHGX(2) = 0.D+0
+        YMHGX(3) = 0.D+0
+      ELSEIF( YMHX(1)/EPSL.LT.EPSL .AND. YMHX(3)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 0.D+0
+        YMHGX(2) = 1.D+0
+        YMHGX(3) = 0.D+0
+      ELSEIF( YMHX(1)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 0.D+0
+        VARX = (YMHGX(2)+YMHGX(3))
+        YMHGX(2) = YMHGX(2)/VARX
+        YMHGX(3) = YMHGX(3)/VARS
+      ELSEIF( YMHX(2)/EPSL.LT.EPSL ) THEN
+        VARX = (YMHGX(1)+YMHGX(3))
+        YMHGX(1) = YMHGX(1)/VARX
+        YMHGX(2) = 0.D+0
+        YMHGX(3) = YMHGX(3)/VARX
+      ELSEIF( YMHX(3)/EPSL.LT.EPSL ) THEN
+        VARX = (YMHGX(1)+YMHGX(2))
+        YMHGX(1) = YMHGX(1)/VARX
+        YMHGX(2) = YMHGX(2)/VARX
+        YMHGX(3) = 0.D+0
+      ENDIF
+      ELSE
+!
+!---  Initial guesses of hydrate-gas mole fraction of formers  ---
+!
+      RMX = 1.D+20
+      IX = 0
+      JX = 0
+      DO J = 1,21
+        DO I = 1,22-J
+          YMHGX(1) = REAL(I-1)*5.D-2
+          YMHGX(2) = REAL(J-1)*5.D-2
+          YMHGX(3) = 1.D+0 - YMHGX(1) - YMHGX(2)
+          IF( YMHGX(3).LT.EPSL ) YMHGX(3) = 0.D+0
+!
+!---      Set interpretation concentrations to actuals  ---
+!
+          ZMIH_HT(1) = YMHGX(1)
+          ZMIH_HT(2) = YMHGX(2)
+          ZMIH_HT(3) = YMHGX(3)
+!
+!---      Hydrate composition at temperature and vapor mole fraction
+!         of formers  ---
+!
+          CALL HYD_X( TKX,YMHGX,XLSX,RHOHX,
+     &      XHAX,XHOX,XHNX,XHWX,XMHAX,XMHOX,XMHNX,XMHWX )
+          XMHX(1) = XMHAX
+          XMHX(2) = XMHOX
+          XMHX(3) = XMHNX
+!
+!---      Residual equations ---
+!
+          SXMHX = XMHX(1) + XMHX(2) + XMHX(3)
+          YMHAX = XMHX(1)/(SXMHX+SMALL)
+          YMHOX = XMHX(2)/(SXMHX+SMALL)
+          YMHNX = XMHX(3)/(SXMHX+SMALL)
+          GX(1,1) = YMHX(1) - XMHX(1)/(SXMHX+SMALL)
+          GX(1,2) = YMHX(2) - XMHX(2)/(SXMHX+SMALL)
+          GX(1,3) = YMHX(3) - XMHX(3)/(SXMHX+SMALL)
+          RX = SQRT( (GX(1,1)**2) + (GX(1,2)**2) + (GX(1,3)**2) )
+          IF( RX.LT.RMX ) THEN
+            RMX = RX
+            IX = I
+            JX = J
+          ENDIF
+        ENDDO
+      ENDDO
+      YMHGX(1) = REAL(IX-1)*5.D-2
+      YMHGX(2) = REAL(JX-1)*5.D-2
+      YMHGX(3) = 1.D+0 - YMHGX(1) - YMHGX(2)
+      IF( YMHGX(3).LT.EPSL ) YMHGX(3) = 0.D+0
+      ENDIF
+!
+!---  Set interpretation concentrations to actuals  ---
+!
+      ZMIH_HT(1) = YMHGX(1)
+      ZMIH_HT(2) = YMHGX(2)
+      ZMIH_HT(3) = YMHGX(3)
+!
+!---  Two-variable Newton-Raphson loop: 
+!     hydrate mole fractions  ---
+!
+      NC = 0
+  110 CONTINUE
+      NC = NC + 1
+      IF( NC.GT.32 ) THEN
+        IF( ISCMX.EQ.1 ) CYCLE SLOOP
+        INDX = 17
+        CHMSG = 'Unconverged FLH_IC5: Hydrate-Gas Mole Fraction of ' //
+     &    'Formers'
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Primary variable switching scheme, selecting the components
+!     with the lowest concentrations  ---
+!
+      IF( YMHX(3).GE.MAX( YMHX(1),YMHX(2) ) ) THEN
+        NX(1) = 1
+        NX(2) = 2
+        NX(3) = 3
+      ELSEIF( YMHX(1).GE.MAX( YMHX(2),YMHX(3) ) ) THEN
+        NX(1) = 2
+        NX(2) = 3
+        NX(3) = 1
+      ELSE
+        NX(1) = 3
+        NX(2) = 1
+        NX(3) = 2
+      ENDIF
+      DO 130 M = 1,3
+        DO 120 NF = 1,2
+          YMHGY(NX(NF)) = YMHGX(NX(NF))
+          DYMHGX(NF) = SIGN( 1.D-6,5.D-1-YMHGX(NX(NF)) )
+  120   CONTINUE
+        IF( M.EQ.2 ) YMHGY(NX(1)) = YMHGX(NX(1)) + DYMHGX(1)
+        IF( M.EQ.3 ) YMHGY(NX(2)) = YMHGX(NX(2)) + DYMHGX(2)
+        YMHGY(NX(3)) = MIN( MAX( 1.D+0-YMHGY(NX(1))-YMHGY(NX(2)),
+     &    0.D+0 ),1.D+0 )
+!
+!---    Hydrate equilibrium pressure and hydrate composition at 
+!       temperature, vapor mole fraction of formers, and inhibitor
+!       concentration  ---
+!
+        CALL HYD_P( TKX,YMHGY,XLSX,PEQHX )
+        CALL HYD_C( TKX,YMHGY,XLSX,RHOHX,XHAX,XHOX,XHNX,XHWX,
+     &    XMHAX,XMHOX,XMHNX,XMHWX )
+        XMHX(1) = XMHAX
+        XMHX(2) = XMHOX
+        XMHX(3) = XMHNX
+!
+!---    Residual equations ---
+!
+        SXMHX = XMHX(1) + XMHX(2) + XMHX(3)
+        GX(1,M) = YMHX(NX(1)) - XMHX(NX(1))/(SXMHX+SMALL)
+        GX(2,M) = YMHX(NX(2)) - XMHX(NX(2))/(SXMHX+SMALL)
+  130 CONTINUE
+!
+!---  Load solution vector and Jacobian matrix for
+!     two-phase conditions  ---
+!
+      DO 140 M = 1,2
+        AJ(M,1) = (GX(M,2)-GX(M,1))/DYMHGX(1)
+        AJ(M,2) = (GX(M,3)-GX(M,1))/DYMHGX(2)
+        BJ(M) = -GX(M,1)
+ 140  CONTINUE
+!
+!---  Solve linear system  ---
+!
+      IF( ABS(AJ(1,1))/EPSL.LT.EPSL .OR. ABS(AJ(1,1))/EPSL.LT.EPSL )
+     &  CYCLE SLOOP
+      JP = 2
+      KP = 2
+      CALL LUDCMP( AJ,JP,KP,IJ,DJ )
+      CALL LUBKSB( AJ,JP,KP,IJ,BJ )
+!
+!---  Update primary unknowns  ---
+!
+      DO 150 NF = 1,2
+        DYMHGX(NF) = SIGN( MIN( 5.D-2,ABS(BJ(NF)) ),BJ(NF) )
+        IF( YMHX(NX(NF))/EPSL.LT.EPSL ) THEN
+          YMHGX(NX(NF)) = 0.D+0
+          DYMHGX(NF) = 0.D+0
+        ELSEIF( YMHGX(NX(NF))/EPSL.LT.EPSL 
+     &    .AND. DYMHGX(NF).LT.0.D+0 ) THEN
+          YMHGX(NX(NF)) = 0.D+0
+          DYMHGX(NF) = 0.D+0
+        ELSE
+          YMHGX(NX(NF)) = YMHGX(NX(NF)) + DYMHGX(NF)
+          YMHGX(NX(NF)) = MAX( MIN( YMHGX(NX(NF)),1.D+0 ),0.D+0 )
+        ENDIF
+  150 CONTINUE
+      SYMHGX = YMHGX(NX(1))+YMHGX(NX(2))
+      IF( (SYMHGX-1.D+0).GT.0.D+0 ) THEN
+        YMHGX(NX(1)) = YMHGX(NX(1))/SYMHGX
+        YMHGX(NX(2)) = YMHGX(NX(2))/SYMHGX
+      ENDIF
+      YMHGX(NX(3)) = MIN( MAX( 1.D+0-YMHGX(NX(1))-YMHGX(NX(2)),0.D+0 ),
+     &  1.D+0 )
+!
+!---  Convergence check  ---
+!
+      IF( ABS(DYMHGX(1)).GT.1.D-7 ) GOTO 110
+      IF( ABS(DYMHGX(2)).GT.1.D-7 ) GOTO 110
+      EXIT SLOOP
+      ENDDO SLOOP
+!
+!---  Converged solution, set interpretation concentrations 
+!     to actuals  ---
+!
+      ZMIH_HT(1) = YMHGX(1)
+      ZMIH_HT(2) = YMHGX(2)
+      ZMIH_HT(3) = YMHGX(3)
+!
+!---  Hydrate equilibrium pressure and hydrate composition at 
+!     temperature, vapor mole fraction of formers, and inhibitor
+!     concentration  ---
+!
+      CALL HYD_P( TKX,YMHGX,XLSX,PEQHX )
+      CALL HYD_C( TKX,YMHGX,XLSX,RHOHX,XHAX,XHOX,XHNX,XHWX,
+     &    XMHAX,XMHOX,XMHNX,XMHWX )
+      PVHX = PEQHX
+      PVHAX = PVHX*YMHGX(1)
+      PVHOX = PVHX*YMHGX(2)
+      PVHNX = PVHX*YMHGX(3)
+!
+!---  Hydrate properties for no-hydrate conditions  ---
+!
+      TMHAX = SHX*RHOHX*XHAX
+      TMHOX = SHX*RHOHX*XHOX
+      TMHNX = SHX*RHOHX*XHNX
+      YMHGAX = YMHGX(1)
+      YMHGOX = YMHGX(2)
+      YMHGNX = YMHGX(3)
+      TEQHX = TKX
+!
+!---  Gas phase partial pressures  ---
+!
+      PVAX = PVHAX
+      PVOX = PVHOX
+      PVNX = PVHNX
+      PVX = PVAX + PVOX + PVNX
+!
+!---  Vapor pressure  ---
+!
+      CALL SP_B( TX,XLSX,PSBX )
+      CALL VPL( PSBX,PVWX,SLX,TX,IZN )
+!
+!---  Total pressure set to maximum of specified pressure or
+!     hydrate equilibrium pressure  ---
+!
+      PX = MAX( (PVX+PVWX),(PSOX+PATM) )
+      PSOX = PX - PATM
+      PGX = PSOX
+!
+!---  Mole fraction of components in gas  ---
+!
+      XMGX(1) = PVAX/PVX
+      XMGX(2) = PVOX/PVX
+      XMGX(3) = PVNX/PVX
+!
+!---  Nonaqueous mole fraction of components  ---
+!
+      ZMCX(1) = XMGX(1)
+      ZMCX(2) = XMGX(2)
+      ZMCX(3) = XMGX(3)
+!
+!---  Two-variable Newton-Raphson loop: nonaqueous mole fractions  ---
+!
+      NC = 0
+  210 CONTINUE
+      NC = NC + 1
+      IF( NC.GT.32 ) THEN
+        INDX = 17
+        CHMSG = 'Unconverged FLH_IC5: Nonaqueous Mole Fraction' // 
+     &    ' of Components'
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Primary variable switching scheme, selecting the components
+!     with the lowest concentrations  ---
+!
+      IF( ZMCX(3).GE.MAX( ZMCX(1),ZMCX(2) ) ) THEN
+        NX(1) = 1
+        NX(2) = 2
+        NX(3) = 3
+      ELSEIF( ZMCX(1).GE.MAX( ZMCX(2),ZMCX(3) ) ) THEN
+        NX(1) = 2
+        NX(2) = 3
+        NX(3) = 1
+      ELSE
+        NX(1) = 3
+        NX(2) = 1
+        NX(3) = 2
+      ENDIF
+      DO 230 M = 1,3
+        DO 220 NF = 1,2
+          ZMCY(NX(NF)) = ZMCX(NX(NF))
+          DZMCX(NF) = SIGN( 1.D-6,5.D-1-ZMCX(NX(NF)) )
+  220   CONTINUE
+        IF( M.EQ.2 ) ZMCY(NX(1)) = ZMCX(NX(1)) + DZMCX(1)
+        IF( M.EQ.3 ) ZMCY(NX(2)) = ZMCX(NX(2)) + DZMCX(2)
+        ZMCY(NX(3)) = MIN( MAX( 1.D+0-ZMCY(NX(1))-ZMCY(NX(2)),0.D+0 ),
+     &    1.D+0 )
+!
+!---    Determine phase state of nonaqueous phases  ---
+!
+        CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCY,NP_HT )
+!
+!---    Nonaqueous gas phase  ---
+!
+        IF( NP_HT.EQ.0 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGY(1) = ZMCY(1)
+          XMGY(2) = ZMCY(2)
+          XMGY(3) = ZMCY(3)
+!
+!---      Liquid mole fractions ---
+!
+          XMNX(1) = ZMCY(1)
+          XMNX(2) = ZMCY(2)
+          XMNX(3) = ZMCY(3)
+!
+!---    Nonaqueous liquid phase  ---
+!
+        ELSEIF( NP_HT.EQ.1 ) THEN
+          BTX = 0.D+0
+!
+!---      Liquid mole fractions ---
+!
+          XMNX(1) = ZMCY(1)
+          XMNX(2) = ZMCY(2)
+          XMNX(3) = ZMCY(3)
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKX )
+!
+!---      Gas mole fractions ---
+!
+          XMGY(1) = FKX(1)*ZMCY(1)
+          XMGY(2) = FKX(2)*ZMCY(2)
+          XMGY(3) = FKX(3)*ZMCY(3)
+          SXMGY = XMGY(1)+XMGY(2)+XMGY(3)
+          XMGY(1) = XMGY(1)/SXMGY
+          XMGY(2) = XMGY(2)/SXMGY
+          XMGY(3) = XMGY(3)/SXMGY        
+!
+!---    Nonaqueous two-phase  ---
+!
+        ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---      K-factors at the lower pressure envelope  ---
+!
+          CALL KF_LPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---      Normalized liquid mole fractions at the lower pressure
+!         envelope  ---
+!
+          XMNX(1) = ZMCY(1)/FKLX(1)
+          XMNX(2) = ZMCY(2)/FKLX(2)
+          XMNX(3) = ZMCY(3)/FKLX(3)
+          SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+          XMNX(1) = XMNX(1)/SXMNX
+          XMNX(2) = XMNX(2)/SXMNX
+          XMNX(3) = XMNX(3)/SXMNX
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKUX )
+!
+!---      Normalized gas mole fractions at the upper pressure
+!         envelope  ---
+!
+          XMGY(1) = ZMCY(1)*FKUX(1)
+          XMGY(2) = ZMCY(2)*FKUX(2)
+          XMGY(3) = ZMCY(3)*FKUX(3)
+          SYMGY = XMGY(1)+XMGY(2)+XMGY(3)
+          XMGY(1) = XMGY(1)/SXMGY
+          XMGY(2) = XMGY(2)/SXMGY
+          XMGY(3) = XMGY(3)/SXMGY
+!
+!---      Beta within the two-phase envelope  ---
+!
+          CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCY )
+!
+!---      Gas mole fractions ---
+!
+          XMGY(1) = BTX*ZMCY(1) + (1.D+0-BTX)*XMGX(1)
+          XMGY(2) = BTX*ZMCY(2) + (1.D+0-BTX)*XMGX(2)
+          XMGY(3) = BTX*ZMCY(3) + (1.D+0-BTX)*XMGX(3)
+!
+!---     Liquid mole fractions ---
+!
+          XMNX(1) = BTX*XMNX(1) + (1.D+0-BTX)*ZMCY(1)
+          XMNX(2) = BTX*XMNX(2) + (1.D+0-BTX)*ZMCY(2)
+          XMNX(3) = BTX*XMNX(3) + (1.D+0-BTX)*ZMCY(3)
+!
+!---    Upper-phase-envelope-gas phase  ---
+!
+        ELSEIF( NP_HT.EQ.3 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGX(1) = ZMCY(1)
+          XMGX(2) = ZMCY(2)
+          XMGX(3) = ZMCY(3)
+!
+!---      K-factors at the upper pressure envelope  ---
+!
+          CALL KF_UPE( TCTX,TKX,ZMCY,FKUX )
+!
+!---      Nonaqueous-liquid mole fractions ---
+!
+          XMNX(1) = ZMCY(1)/FKUX(1)
+          XMNX(2) = ZMCY(2)/FKUX(2)
+          XMNX(3) = ZMCY(3)/FKUX(3)
+          SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+          XMNX(1) = XMNX(1)/SXMNX
+          XMNX(2) = XMNX(2)/SXMNX
+          XMNX(3) = XMNX(3)/SXMNX
+!
+!---    Lower-phase-envelope-gas phase  ---
+!
+        ELSEIF( NP_HT.EQ.4 ) THEN
+          BTX = 1.D+0
+!
+!---      Gas mole fractions ---
+!
+          XMGX(1) = ZMCY(1)
+          XMGX(2) = ZMCY(2)
+          XMGX(3) = ZMCY(3)
+!
+!---      K-factors at the lower pressure envelope  ---
+!
+          CALL KF_LPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---      Nonaqueous-liquid mole fractions ---
+!
+          XMNX(1) = ZMCY(1)/FKLX(1)
+          XMNX(2) = ZMCY(2)/FKLX(2)
+          XMNX(3) = ZMCY(3)/FKLX(3)
+          SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+          XMNX(1) = XMNX(1)/SXMNX
+          XMNX(2) = XMNX(2)/SXMNX
+          XMNX(3) = XMNX(3)/SXMNX
+        ENDIF
+!
+!---    Residual equations ---
+!
+        GX(1,M) = XMGX(NX(1)) - XMGY(NX(1))
+        GX(2,M) = XMGX(NX(2)) - XMGY(NX(2))
+  230 CONTINUE
+!
+!---  Load solution vector and Jacobian matrix for
+!     two-phase conditions  ---
+!
+      DO 240 M = 1,2
+        AJ(M,1) = (GX(M,2)-GX(M,1))/DZMCX(1)
+        AJ(M,2) = (GX(M,3)-GX(M,1))/DZMCX(2)
+        BJ(M) = -GX(M,1)
+ 240  CONTINUE
+!
+!---  Solve linear system  ---
+!
+      JP = 2
+      KP = 2
+      CALL LUDCMP( AJ,JP,KP,IJ,DJ )
+      CALL LUBKSB( AJ,JP,KP,IJ,BJ )
+!
+!---  Update primary unknowns  ---
+!
+      DO 250 NF = 1,2
+        DZMCX(NF) = SIGN( MIN( 5.D-2,ABS(BJ(NF)) ),BJ(NF) )
+        IF( XMGX(NX(NF))/EPSL.LT.EPSL ) THEN
+          ZMCX(NX(NF)) = 0.D+0
+          DZMCX(NF) = 0.D+0
+        ELSEIF( ZMCX(NX(NF))/EPSL.LT.EPSL 
+     &    .AND. DZMCX(NF).LT.0.D+0 ) THEN
+          ZMCX(NX(NF)) = 0.D+0
+          DZMCX(NF) = 0.D+0
+        ELSE
+          ZMCX(NX(NF)) = ZMCX(NX(NF)) + DZMCX(NF)
+          ZMCX(NX(NF)) = MAX( MIN( ZMCX(NX(NF)),1.D+0 ),0.D+0 )
+        ENDIF
+  250 CONTINUE
+      SZMCX = ZMCX(NX(1))+ZMCX(NX(2))
+      IF( (SZMCX-1.D+0).GT.0.D+0 ) THEN
+        ZMCX(NX(1)) = ZMCX(NX(1))/SZMCX
+        ZMCX(NX(2)) = ZMCX(NX(2))/SZMCX
+      ENDIF
+      ZMCX(NX(3)) = MIN( MAX( 1.D+0-ZMCX(NX(1))-ZMCX(NX(2)),0.D+0 ),
+     &  1.D+0 )
+!
+!---  Convergence check  ---
+!
+      IF( ABS(DZMCX(1)).GT.1.D-9 ) GOTO 210
+      IF( ABS(DZMCX(2)).GT.1.D-9 ) GOTO 210
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---  Nonaqueous liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+        BTX = 0.D+0
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = FKX(1)*ZMCX(1)
+        XMGX(2) = FKX(2)*ZMCX(2)
+        XMGX(3) = FKX(3)*ZMCX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX        
+!
+!---  Nonaqueous two-phase  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKLX(1)
+        XMNX(2) = ZMCX(2)/FKLX(2)
+        XMNX(3) = ZMCX(3)/FKLX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized gas mole fractions at the upper pressure
+!       envelope  ---
+!
+        XMGX(1) = ZMCX(1)*FKUX(1)
+        XMGX(2) = ZMCX(2)*FKUX(2)
+        XMGX(3) = ZMCX(3)*FKUX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX
+!
+!---    Beta within the two-phase envelope  ---
+!
+        CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = BTX*ZMCX(1) + (1.D+0-BTX)*XMGX(1)
+        XMGX(2) = BTX*ZMCX(2) + (1.D+0-BTX)*XMGX(2)
+        XMGX(3) = BTX*ZMCX(3) + (1.D+0-BTX)*XMGX(3)
+!
+!---   Liquid mole fractions ---
+!
+        XMNX(1) = BTX*XMNX(1) + (1.D+0-BTX)*ZMCX(1)
+        XMNX(2) = BTX*XMNX(2) + (1.D+0-BTX)*ZMCX(2)
+        XMNX(3) = BTX*XMNX(3) + (1.D+0-BTX)*ZMCX(3)
+!
+!---  Upper-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.3 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCY,FKUX )
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)/FKUX(1)
+        XMNX(2) = ZMCX(2)/FKUX(2)
+        XMNX(3) = ZMCX(3)/FKUX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+!
+!---  Lower-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.4 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCY(1)
+        XMGX(2) = ZMCY(2)
+        XMGX(3) = ZMCY(3)
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCY,FKLX )
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)/FKLX(1)
+        XMNX(2) = ZMCX(2)/FKLX(2)
+        XMNX(3) = ZMCX(3)/FKLX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+      ENDIF
+!
+!---  Peng-Robinson gas mixture coefficients  ---
+!
+      CALL PRC_X( AGX,AIX,BGX,XMGX )
+!
+!---  Peng-Robinson gas compressibility ---
+!
+      INDX = 1
+      CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---  Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+      CALL PRC_X( ANX,AIX,BNX,XMNX )
+!
+!---  Peng-Robinson nonaqueous-liquid compressibility ---
+!
+      INDX = 2
+      CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---  Peng-Robinson gas component fugacities ---
+!
+      CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,XMGX,ZGX )
+!
+!---  CO2 solubility ---
+!
+      FUGAX = FUGX(1)*PVX*XMGX(1)
+      CALL SOL_LA( TX,FUGAX,XLSX,XMLX(1) )
+!
+!---  CH4 solubility ---
+!
+      FUGOX = FUGX(2)*PVX*XMGX(2)
+      CALL SOL_LO( TX,FUGOX,XLSX,XMLX(2) )
+!
+!---  N2 solubility ---
+!
+      FUGNX = FUGX(3)*PVX*XMGX(3)
+      CALL SOL_LN( TX,FUGNX,XLSX,XMLX(3) )
+!
+!---  Aqueous molecular weight ---
+!
+      WTMLX = (XMLX(1)*WTMA + XMLX(2)*WTMO + XMLX(3)*WTMN +
+     &  WTMW*(1.D+0-XMLX(1)-XMLX(2)-XMLX(3)))/
+     &  (1.D+0-XLSX+WTMW*XLSX/WTMS)
+      PPLX = MAX( PX,PSBX )
+      CALL DENS_B( TX,PPLX,XLSX,RHOBX )
+      XLAX = XMLX(1)*WTMA/WTMLX
+      XLOX = XMLX(2)*WTMO/WTMLX
+      XLNX = XMLX(3)*WTMN/WTMLX
+      CALL DENS_L( TX,RHOBX,XLAX,XLOX,XLNX,RHOLX )
+!
+!---  Aqueous molar density ---
+!
+      RHOMLX = RHOLX/WTMLX
+!
+!---  Gas molar density ---
+!
+      ISRX = 2
+      CALL DENS_W( TX,PVWX,RHOX,RHOGWX,ISRX )
+      RHOMGWX = RHOGWX/WTMW
+      RHOMGCX = PVX/(ZGX*TKX*RCU)
+      RHOMGX = RHOMGCX + RHOMGWX
+!
+!---  Nonaqueous-liquid molar density ---
+!
+      RHOMNX = PVX/(ZNX*TKX*RCU)
+!
+!---  Volume fraction of gas  ---
+!
+      STX = (BTX/RHOMGCX)/((BTX/RHOMGCX) + ((1.D+0-BTX)/RHOMNX))
+      SGX = STX*SGNX*(1.D+0-SHX)
+      SNX = (1.D+0-STX)*SGNX*(1.D+0-SHX)
+      SLIX = SLX + SIX
+      CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+      PNX = PGX - CPGNX
+      PLX = PGX - CPGLX
+!
+!---  Ice pressure  ---
+!
+      CALL ICE( TX,PLX,XLSX,TFPX,PIX )
+!
+!---  Ice saturation  ---
+!
+      CALL SP_HYDT_KE( PIX,PLX,PNX,SHX,SIX,SLX,IZN,N )
+!
+!---  Aqueous, gas, and nonaqueous liquid mole fractions  ---
+!
+      XMLAX = XMLX(1)
+      XMLOX = XMLX(2)
+      XMLNX = XMLX(3)
+      YMGAX = XMGX(1)
+      YMGOX = XMGX(2)
+      YMGNX = XMGX(3)
+      XMNAX = XMGX(1)
+      XMNOX = XMGX(2)
+      XMNNX = XMGX(3)
+      ZMCAX = XMGX(1)
+      ZMCOX = XMGX(2)
+      ZMCNX = XMGX(3)
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_IC5 group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_IC6( PEQHX,PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,
+     &  PSOX,PVAX,PVHAX,PVNX,PVHNX,PVOX,PVHOX,PVWX,RHOHX,
+     &  SHX,SIX,SGX,SLX,SNX,TX,TCRX,TCTX,TEQHX,
+     &  XHAX,XHNX,XHOX,XHWX,XLSX,YLSX,YMGAX,YMGNX,YMGOX,YMHGAX,YMHGNX,
+     &  YMHGOX,ZMCAX,ZMCNX,ZMCOX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for initial condition #6
+!
+!     SHX = 0.0
+!     SGX + SNX > 0.0
+!     SLX < 1.0
+!
+!     Input variables:
+!
+!     TX - temperature, C
+!     PX - pressure, Pa (absolute)
+!     SLX - aqueous saturation
+!     ZMCX(1) - total nonaqueous CO2 mole fraction (input as PVAX )
+!     ZMCX(2) - total nonaqueous CH4 mole fraction (input as PVOX )
+!     ZMCX(3) - total nonaqueous N2 mole fraction (input as PVNX )
+!     IZN - rock/soil zonation number
+!     N - node number
+!
+!     Output variables:
+!
+!     PGX - gas pressure, guage Pa
+!     PIX - ice pressure, guage Pa
+!     PNX - nonaqueous liquid pressure, guage Pa
+!     PSBX - saturated brine vapor pressure, absolute Pa
+!     PVAX - mobile CO2 vapor pressure, absolute Pa
+!     PVHAX - hydrate CO2 vapor pressure, absolute Pa
+!     PVOX - mobile CH4 vapor pressure, absolute Pa
+!     PVHOX - hydrate CH4 vapor pressure, absolute Pa
+!     PVNX - mobile N2 vapor pressure, absolute Pa
+!     PVHNX - hydrate N2 vapor pressure, absolute Pa
+!     PVWX - water vapor pressure, absolute Pa
+!     RHOHX - hydrate density, kg/m^3
+!     RKGX - gas relative permeability
+!     RKLX - aqueous relative permeability tensor
+!     RKNX - nonaqueous liquid relative permeability
+!     SHX - hydrate saturation
+!     SIX - ice saturation
+!     SGX - gas saturation
+!     SLX - aqueous saturation
+!     SNX - nonaqueous liquid saturation
+!     TEQHX - hydrate equilibrium temperature, K
+!     TMHAX - total CO2 hydrate mass, kg
+!     TMHNX - total N2 hydrate mass, kg
+!     TMHOX - total CH4 hydrate mass, kg
+!     XHAX - CO2 hydrate mass fraction
+!     XHNX - N2 hydrate mass fraction
+!     XHOX - CH4 hydrate mass fraction
+!     XHWX - water hydrate mass fraction
+!     XLSX - dissolved salt aqueous mass fraction
+!     YLSX - total salt aqueous mass fraction
+!     YMGAX - CO2 mole fraction of mobile formers
+!     YMHGAX - CO2 mole fraction of hydrate formers
+!     YMGOX - CH4 mole fraction of mobile formers
+!     YMHGOX - CH4 mole fraction of hydrate formers
+!     YMGNX - N2 mole fraction of mobile formers
+!     YMHGNX - N2 mole fraction of hydrate formers
+!     ZMCAX - CO2 mole fraction of nonaqueous components
+!     ZMCNX - N2 mole fraction of nonaqueous components
+!     ZMCOX - CH4 mole fraction of nonaqueous components
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 22 November 2013.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE PORMED
+      USE NAPL
+      USE HYST
+      USE HYDT
+      USE GRID
+      USE FDVP
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 AIX(LHF_HT),ZMCX(LHF_HT)
+      REAL*8 XMGX(LHF_HT)
+      REAL*8 XMNX(LHF_HT),XMLX(LHF_HT)
+      REAL*8 YMHGX(LHF_HT)
+      REAL*8 FUGLX(LHF_HT),FUGX(LHF_HT)
+      REAL*8 FKX(LHF_HT),FKLX(LHF_HT),FKUX(LHF_HT)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_IC6'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PX = PSOX + PATM
+      PGX = PSOX
+!
+!---  Assign aqueous CO2, CH4, and N2 mole fraction of formers,
+!     nonaqueous liquid saturation, and gas saturation  ---
+!
+      ZMCX(1) = MIN( MAX( PVAX,0.D+0 ),1.D+0 )
+      ZMCX(2) = MIN( MAX( PVOX,0.D+0 ),1.D+0 )
+      ZMCX(3) = MIN( MAX( PVNX,0.D+0 ),1.D+0 )
+!
+!---  Peng-Robinson temperature dependent component 
+!     coefficients  ---
+!
+      CALL PRC_T( AIX,TKX )
+!
+!---  Brine salt mass fraction  ---
+!      
+      CALL SOL_LS( TX,XLSMX )
+      XLSX = MIN( YLSX,XLSMX )
+!
+!---  Interfacial surface tensions  ---
+!
+      SIG_GL = SCHR(5,IZN)
+      SIG_NL = SCHR(6,IZN)
+      SIG_GN = SCHR(7,IZN)
+      SIG_HL = SCHR(9,IZN)
+      SIG_IL = SCHR(9,IZN)
+      IF( ISLC(7).EQ.2 .OR. ISLC(7).EQ.3 )
+     &  CALL SFT_L( TX,XLSX,SIG_GL )
+      CA_NL = ((SIG_NL**2) - (SIG_GN**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_NL)
+      CA_GN = ((SIG_GN**2) - (SIG_NL**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_GN)
+!
+!---  Interphase scaling factors  ---
+!
+      BGL = SCHR(8,IZN)/SIG_GL
+      BNL = SCHR(8,IZN)/(SIG_NL*CA_NL)
+      BGN = SCHR(8,IZN)/(SIG_GN*CA_GN)
+      BHL = SCHR(8,IZN)/SIG_HL
+      BIL = SCHR(8,IZN)/SIG_HL
+!
+!---  Entry pressure without hydrate barrier adjustment  ---
+!
+      ENPR = SCHR(2,IZN)*RHORL*GRAV
+!
+!---  Nonaqueous saturation  ---
+!
+      SHX = 0.D+0
+      SIX = 0.D+0
+      SGNX = 1.D+0 - SHX - SIX - SLX
+      IF( SGNX.LE.0.D+0 ) THEN
+        INDX = 11
+        RLMSG = SGNX
+        CHMSG = 'FLH_IC6: Zero Nonaqueous Saturation: ' // 
+     &    'SG + SN = '
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Vapor pressure  ---
+!
+      CALL SP_B( TX,XLSX,PSBX )
+      CALL VPL( PSBX,PVWX,SLX,TX,IZN )
+      PVX = PX - PVWX
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---  Nonaqueous liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+        BTX = 0.D+0
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = FKX(1)*ZMCX(1)
+        XMGX(2) = FKX(2)*ZMCX(2)
+        XMGX(3) = FKX(3)*ZMCX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX        
+!
+!---  Nonaqueous two-phase  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKLX(1)
+        XMNX(2) = ZMCX(2)/FKLX(2)
+        XMNX(3) = ZMCX(3)/FKLX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized gas mole fractions at the upper pressure
+!       envelope  ---
+!
+        XMGX(1) = ZMCX(1)*FKUX(1)
+        XMGX(2) = ZMCX(2)*FKUX(2)
+        XMGX(3) = ZMCX(3)*FKUX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX
+!
+!---    Beta within the two-phase envelope  ---
+!
+        CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = BTX*ZMCX(1) + (1.D+0-BTX)*XMGX(1)
+        XMGX(2) = BTX*ZMCX(2) + (1.D+0-BTX)*XMGX(2)
+        XMGX(3) = BTX*ZMCX(3) + (1.D+0-BTX)*XMGX(3)
+!
+!---   Liquid mole fractions ---
+!
+        XMNX(1) = BTX*XMNX(1) + (1.D+0-BTX)*ZMCX(1)
+        XMNX(2) = BTX*XMNX(2) + (1.D+0-BTX)*ZMCX(2)
+        XMNX(3) = BTX*XMNX(3) + (1.D+0-BTX)*ZMCX(3)
+!
+!---  Upper-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.3 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized liquid mole fractions at the upper pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKUX(1)
+        XMNX(2) = ZMCX(2)/FKUX(2)
+        XMNX(3) = ZMCX(3)/FKUX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+!
+!---  Lower-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.4 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKLX(1)
+        XMNX(2) = ZMCX(2)/FKLX(2)
+        XMNX(3) = ZMCX(3)/FKLX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+      ENDIF
+!
+!---  Peng-Robinson gas mixture coefficients  ---
+!
+      CALL PRC_X( AGX,AIX,BGX,XMGX )
+!
+!---  Peng-Robinson gas compressibility ---
+!
+      INDX = 1
+      CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---  Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+      CALL PRC_X( ANX,AIX,BNX,XMNX )
+!
+!---  Peng-Robinson nonaqueous-liquid compressibility ---
+!
+      INDX = 2
+      CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---  Peng-Robinson gas component fugacities ---
+!
+      CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,XMGX,ZGX )
+!
+!---  CO2 solubility ---
+!
+      FUGAX = FUGX(1)*PVX*XMGX(1)
+      CALL SOL_LA( TX,FUGAX,XLSX,XMLX(1) )
+!
+!---  CH4 solubility ---
+!
+      FUGOX = FUGX(2)*PVX*XMGX(2)
+      CALL SOL_LO( TX,FUGOX,XLSX,XMLX(2) )
+!
+!---  N2 solubility ---
+!
+      FUGNX = FUGX(3)*PVX*XMGX(3)
+      CALL SOL_LN( TX,FUGNX,XLSX,XMLX(3) )
+!
+!---  Aqueous molecular weight ---
+!
+      WTMLX = (XMLX(1)*WTMA + XMLX(2)*WTMO + XMLX(3)*WTMN +
+     &  WTMW*(1.D+0-XMLX(1)-XMLX(2)-XMLX(3)))/
+     &  (1.D+0-XLSX+WTMW*XLSX/WTMS)
+      PPLX = MAX( PX,PSBX )
+      CALL DENS_B( TX,PPLX,XLSX,RHOBX )
+      XLAX = XMLX(1)*WTMA/WTMLX
+      XLOX = XMLX(2)*WTMO/WTMLX
+      XLNX = XMLX(3)*WTMN/WTMLX
+      CALL DENS_L( TX,RHOBX,XLAX,XLOX,XLNX,RHOLX )
+!
+!---  Aqueous molar density ---
+!
+      RHOMLX = RHOLX/WTMLX
+!
+!---  Gas molar density ---
+!
+      ISRX = 2
+      CALL DENS_W( TX,PVWX,RHOX,RHOGWX,ISRX )
+      RHOMGWX = RHOGWX/WTMW
+      RHOMGCX = PVX/(ZGX*TKX*RCU)
+      RHOMGX = RHOMGCX + RHOMGWX
+!
+!---  Nonaqueous-liquid molar density ---
+!
+      RHOMNX = PVX/(ZNX*TKX*RCU)
+!
+!---  Volume fraction of gas  ---
+!
+      SHX = 0.D+0
+      STX = (BTX/RHOMGCX)/((BTX/RHOMGCX) + ((1.D+0-BTX)/RHOMNX))
+      SGX = STX*SGNX
+      SNX = (1.D+0-STX)*SGNX
+      SLIX = SLX + SIX
+      CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+      PNX = PGX - CPGNX
+      PLX = PGX - CPGLX
+!
+!---  Ice pressure  ---
+!
+      CALL ICE( TX,PLX,XLSX,TFPX,PIX )
+!
+!---  Ice saturation  ---
+!
+      CALL SP_HYDT_KE( PIX,PLX,PNX,SHX,SIX,SLX,IZN,N )
+!
+!---  Aqueous, gas, and nonaqueous liquid mole fractions  ---
+!
+      XMLAX = XMLX(1)
+      XMLOX = XMLX(2)
+      XMLNX = XMLX(3)
+      YMGAX = XMGX(1)
+      YMGOX = XMGX(2)
+      YMGNX = XMGX(3)
+      XMNAX = XMNX(1)
+      XMNOX = XMNX(2)
+      XMNNX = XMNX(3)
+      ZMCAX = ZMCX(1)
+      ZMCOX = ZMCX(2)
+      ZMCNX = ZMCX(3)
+!
+!---  Component vapor pressures  ---
+!
+      PVAX = PVX*YMGAX
+      PVOX = PVX*YMGOX
+      PVNX = PVX*YMGNX
+!
+!---  Hydrate properties for no-hydrate conditions  ---
+!
+      YMHGAX = 0.D+0
+      YMHGOX = 1.D+0
+      YMHGNX = 0.D+0
+      TEQHX = -TABS
+      XHAX = 0.D+0
+      XHOX = 0.D+0
+      XHNX = 0.D+0
+      XHWX = 1.D+0
+      RHOHX = 0.D+0
+      SHX = 0.D+0
+!
+!---  Hydrate equilibrium temperature at the vapor pressure conditions  ---
+!
+      PVHAX = PVAX
+      PVHOX = PVOX
+      PVHNX = PVNX
+      PVHX = PVHAX+PVHOX+PVHNX
+      IF( PVHX.GT.EPSL ) THEN
+        YMHGX(1) = PVHAX/PVHX
+        YMHGX(2) = PVHOX/PVHX
+        YMHGX(3) = PVHNX/PVHX
+        YMHGAX = YMHGX(1)
+        YMHGOX = YMHGX(2)
+        YMHGNX = YMHGX(3)
+!
+!---    Set interpretation concentrations to actuals  ---
+!
+        ZMIH_HT(1) = YMHGX(1)
+        ZMIH_HT(2) = YMHGX(2)
+        ZMIH_HT(3) = YMHGX(3)
+!
+!---    Hydrate equilibrium pressure as a function of temperature,
+!       vapor mole fractions, and inhibitor concentration  ---
+!
+        CALL HYD_P( TKX,YMHGX,XLSX,PEQHX )
+!
+!---    Hydrate composition at temperature,
+!       vapor mole fractions, and inhibitor concentration  ---
+!
+        IF( PVHX.GE.PEQHX ) THEN
+          CALL HYD_C( TKX,YMHGX,XLSX,RHOHX,XHAX,XHOX,
+     &      XHNX,XHWX,XMHAX,XMHOX,XMHNX,XMHWX )
+          PVHAX = YMHGX(1)*PVHX
+          PVHOX = YMHGX(2)*PVHX
+          PVHNX = YMHGX(3)*PVHX
+        ENDIF
+      ENDIF
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_IC6 group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_IC7( PEQHX,PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,
+     &  PSOX,PVAX,PVHAX,PVNX,PVHNX,PVOX,PVHOX,PVWX,RHOHX,
+     &  SHX,SIX,SGX,SLX,SNX,TX,TCRX,TCTX,TEQHX,TMHAX,TMHNX,TMHOX,
+     &  XHAX,XHNX,XHOX,XHWX,XLSX,YLSX,YMGAX,YMGNX,YMGOX,YMHGAX,YMHGNX,
+     &  YMHGOX,ZMCAX,ZMCNX,ZMCOX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for initial condition #7
+!
+!     SHX > 0.0
+!     SGX + SNX > 0.0
+!     SLX < 1.0
+!
+!     Input variables:
+!
+!     TX - temperature, C
+!     PX - system pressure, absolute Pa (input as PX)
+!     SLX - aqueous saturation (input as SLX)
+!     ZMCX(1) - total nonaqueous CO2 mole fraction (input as PVAX )
+!     ZMCX(2) - total nonaqueous CH4 mole fraction (input as PVOX )
+!     ZMCX(3) - total nonaqueous N2 mole fraction (input as PVNX )
+!     SHX - hydrate saturation
+!     YMHX(1) - hydrate CO2 mole fraction of formers (input as PVHAX)
+!     YMHX(2) - hydrate CH4 mole fraction of formers (input as PVHOX)
+!     YMHX(3) - hydrate N2 mole fraction of formers (input as PVHNX)
+!     IZN - rock/soil zonation number
+!     N - node number
+!     IZN - rock/soil zonation number
+!     N - node number
+!
+!     Output variables:
+!
+!     PGX - gas pressure, guage Pa
+!     PIX - ice pressure, guage Pa
+!     PNX - nonaqueous liquid pressure, guage Pa
+!     PSBX - saturated brine vapor pressure, absolute Pa
+!     PVAX - mobile CO2 vapor pressure, absolute Pa
+!     PVHAX - hydrate CO2 vapor pressure, absolute Pa
+!     PVOX - mobile CH4 vapor pressure, absolute Pa
+!     PVHOX - hydrate CH4 vapor pressure, absolute Pa
+!     PVNX - mobile N2 vapor pressure, absolute Pa
+!     PVHNX - hydrate N2 vapor pressure, absolute Pa
+!     PVWX - water vapor pressure, absolute Pa
+!     RHOHX - hydrate density, kg/m^3
+!     RKGX - gas relative permeability
+!     RKLX - aqueous relative permeability tensor
+!     RKNX - nonaqueous liquid relative permeability
+!     SHX - hydrate saturation
+!     SIX - ice saturation
+!     SGX - gas saturation
+!     SLX - aqueous saturation
+!     SNX - nonaqueous liquid saturation
+!     TEQHX - hydrate equilibrium temperature, K
+!     TMHAX - total CO2 hydrate mass, kg
+!     TMHNX - total N2 hydrate mass, kg
+!     TMHOX - total CH4 hydrate mass, kg
+!     XHAX - CO2 hydrate mass fraction
+!     XHNX - N2 hydrate mass fraction
+!     XNOX - CH4 hydrate mass fraction
+!     XNWX - water hydrate mass fraction
+!     XLSX - dissolved salt aqueous mass fraction
+!     YLSX - total salt aqueous mass fraction
+!     YMGAX - CO2 mole fraction of mobile formers
+!     YMHGAX - CO2 mole fraction of hydrate formers
+!     YMGOX - CH4 mole fraction of mobile formers
+!     YMHGOX - CH4 mole fraction of hydrate formers
+!     ZMCAX - CO2 mole fraction of nonaqueous components
+!     ZMCNX - N2 mole fraction of nonaqueous components
+!     ZMCOX - CH4 mole fraction of nonaqueous components
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 17 September 2010.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE PORMED
+      USE NAPL
+      USE HYST
+      USE HYDT
+      USE GRID
+      USE FDVP
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 AIX(LHF_HT),ZMCX(LHF_HT)
+      REAL*8 XMGX(LHF_HT)
+      REAL*8 XMNX(LHF_HT),XMLX(LHF_HT)
+      REAL*8 YMHX(LHF_HT)
+      REAL*8 YMHGX(LHF_HT),YMHGY(LHF_HT),XMHX(LHF_HT),DYMHGX(LHF_HT)
+      REAL*8 FUGLX(LHF_HT),FUGX(LHF_HT)
+      REAL*8 FKX(LHF_HT),FKLX(LHF_HT),FKUX(LHF_HT)
+      REAL*8 AJ(2,2),BJ(2),GX(2,3)
+      INTEGER IJ(2),NX(3)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_IC7'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PX = PSOX + PATM
+      PGX = PSOX
+!
+!---  Assign aqueous CO2, CH4, and N2 mole fraction of formers,
+!     nonaqueous liquid saturation, and gas saturation  ---
+!
+      ZMCX(1) = MIN( MAX( PVAX,0.D+0 ),1.D+0 )
+      ZMCX(2) = MIN( MAX( PVOX,0.D+0 ),1.D+0 )
+      ZMCX(3) = MIN( MAX( PVNX,0.D+0 ),1.D+0 )
+      SLX = MIN( MAX( SLX,0.D+0 ),1.D+0 )
+!
+!---  Assign hydrate CO2, CH4, and N2 mole fraction of formers  ---
+!
+      YMHX(1) = MIN( MAX( PVHAX,0.D+0 ),1.D+0 )
+      YMHX(2) = MIN( MAX( PVHOX,0.D+0 ),1.D+0 )
+      YMHX(3) = MIN( MAX( PVHNX,0.D+0 ),1.D+0 )
+!
+!---  Peng-Robinson temperature dependent component 
+!     coefficients  ---
+!
+      CALL PRC_T( AIX,TKX )
+!
+!---  Brine salt mass fraction  ---
+!      
+      CALL SOL_LS( TX,XLSMX )
+      XLSX = MIN( YLSX,XLSMX )
+!
+!---  Interfacial surface tensions  ---
+!
+      SIG_GL = SCHR(5,IZN)
+      SIG_NL = SCHR(6,IZN)
+      SIG_GN = SCHR(7,IZN)
+      SIG_HL = SCHR(9,IZN)
+      SIG_IL = SCHR(9,IZN)
+      IF( ISLC(7).EQ.2 .OR. ISLC(7).EQ.3 )
+     &  CALL SFT_L( TX,XLSX,SIG_GL )
+      CA_NL = ((SIG_NL**2) - (SIG_GN**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_NL)
+      CA_GN = ((SIG_GN**2) - (SIG_NL**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_GN)
+!
+!---  Interphase scaling factors  ---
+!
+      BGL = SCHR(8,IZN)/SIG_GL
+      BNL = SCHR(8,IZN)/(SIG_NL*CA_NL)
+      BGN = SCHR(8,IZN)/(SIG_GN*CA_GN)
+      BHL = SCHR(8,IZN)/SIG_HL
+      BIL = SCHR(8,IZN)/SIG_HL
+!
+!---  Entry pressure without hydrate barrier adjustment  ---
+!
+      ENPR = SCHR(2,IZN)*RHORL*GRAV
+!
+!---  Nonaqueous saturation  ---
+!
+      SIX = 0.D+0
+      SGNX = 1.D+0 - SHX - SIX - SLX
+      IF( SGNX.LE.0.D+0 ) THEN
+        INDX = 11
+        RLMSG = SGNX
+        CHMSG = 'FLH_IC7: Zero Nonaqueous Saturation: ' // 
+     &    'SG + SN = '
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Vapor pressure  ---
+!
+      CALL SP_B( TX,XLSX,PSBX )
+      CALL VPL( PSBX,PVWX,SLX,TX,IZN )
+      PVX = PX-PVWX
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+        BTX = 1.D+0
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = ZMCX(1)
+        XMGX(2) = ZMCX(2)
+        XMGX(3) = ZMCX(3)
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---  Nonaqueous liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+        BTX = 0.D+0
+!
+!---    Liquid mole fractions ---
+!
+        XMNX(1) = ZMCX(1)
+        XMNX(2) = ZMCX(2)
+        XMNX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = FKX(1)*ZMCX(1)
+        XMGX(2) = FKX(2)*ZMCX(2)
+        XMGX(3) = FKX(3)*ZMCX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX        
+!
+!---  Nonaqueous two-phase  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        XMNX(1) = ZMCX(1)/FKLX(1)
+        XMNX(2) = ZMCX(2)/FKLX(2)
+        XMNX(3) = ZMCX(3)/FKLX(3)
+        SXMNX = XMNX(1)+XMNX(2)+XMNX(3)
+        XMNX(1) = XMNX(1)/SXMNX
+        XMNX(2) = XMNX(2)/SXMNX
+        XMNX(3) = XMNX(3)/SXMNX
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized gas mole fractions at the upper pressure
+!       envelope  ---
+!
+        XMGX(1) = ZMCX(1)*FKUX(1)
+        XMGX(2) = ZMCX(2)*FKUX(2)
+        XMGX(3) = ZMCX(3)*FKUX(3)
+        SXMGX = XMGX(1)+XMGX(2)+XMGX(3)
+        XMGX(1) = XMGX(1)/SXMGX
+        XMGX(2) = XMGX(2)/SXMGX
+        XMGX(3) = XMGX(3)/SXMGX
+!
+!---    Beta within the two-phase envelope  ---
+!
+        CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCX )
+!
+!---    Gas mole fractions ---
+!
+        XMGX(1) = BTX*ZMCX(1) + (1.D+0-BTX)*XMGX(1)
+        XMGX(2) = BTX*ZMCX(2) + (1.D+0-BTX)*XMGX(2)
+        XMGX(3) = BTX*ZMCX(3) + (1.D+0-BTX)*XMGX(3)
+!
+!---   Liquid mole fractions ---
+!
+        XMNX(1) = BTX*XMNX(1) + (1.D+0-BTX)*ZMCX(1)
+        XMNX(2) = BTX*XMNX(2) + (1.D+0-BTX)*ZMCX(2)
+        XMNX(3) = BTX*XMNX(3) + (1.D+0-BTX)*ZMCX(3)
+      ENDIF
+!
+!---  Peng-Robinson gas mixture coefficients  ---
+!
+      CALL PRC_X( AGX,AIX,BGX,XMGX )
+!
+!---  Peng-Robinson gas compressibility ---
+!
+      INDX = 1
+      CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---  Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+      CALL PRC_X( ANX,AIX,BNX,XMNX )
+!
+!---  Peng-Robinson nonaqueous-liquid compressibility ---
+!
+      INDX = 2
+      CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---  Peng-Robinson gas component fugacities ---
+!
+      CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,XMGX,ZGX )
+!
+!---  CO2 solubility ---
+!
+      FUGAX = FUGX(1)*PVX*XMGX(1)
+      CALL SOL_LA( TX,FUGAX,XLSX,XMLX(1) )
+!
+!---  CH4 solubility ---
+!
+      FUGOX = FUGX(2)*PVX*XMGX(2)
+      CALL SOL_LO( TX,FUGOX,XLSX,XMLX(2) )
+!
+!---  N2 solubility ---
+!
+      FUGNX = FUGX(3)*PVX*XMGX(3)
+      CALL SOL_LN( TX,FUGNX,XLSX,XMLX(3) )
+!
+!---  Aqueous molecular weight ---
+!
+      WTMLX = (XMLX(1)*WTMA + XMLX(2)*WTMO + XMLX(3)*WTMN +
+     &  WTMW*(1.D+0-XMLX(1)-XMLX(2)-XMLX(3)))/
+     &  (1.D+0-XLSX+WTMW*XLSX/WTMS)
+      PPLX = MAX( PX,PSBX )
+      CALL DENS_B( TX,PPLX,XLSX,RHOBX )
+      XLAX = XMLX(1)*WTMA/WTMLX
+      XLOX = XMLX(2)*WTMO/WTMLX
+      XLNX = XMLX(3)*WTMN/WTMLX
+      CALL DENS_L( TX,RHOBX,XLAX,XLOX,XLNX,RHOLX )
+!
+!---  Aqueous molar density ---
+!
+      RHOMLX = RHOLX/WTMLX
+!
+!---  Gas molar density ---
+!
+      ISRX = 2
+      CALL DENS_W( TX,PVWX,RHOX,RHOGWX,ISRX )
+      RHOMGWX = RHOGWX/WTMW
+      RHOMGCX = PVX/(ZGX*TKX*RCU)
+      RHOMGX = RHOMGCX + RHOMGWX
+!
+!---  Nonaqueous-liquid molar density ---
+!
+      RHOMNX = PVX/(ZNX*TKX*RCU)
+!
+!---  Volume fraction of gas  ---
+!
+      STX = (BTX/RHOMGCX)/((BTX/RHOMGCX) + ((1.D+0-BTX)/RHOMNX))
+      SGX = STX*SGNX*(1.D+0-SHX)
+      SNX = (1.D+0-STX)*SGNX*(1.D+0-SHX)
+      SLIX = SLX + SIX
+      CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+      PNX = PGX - CPGNX
+      PLX = PGX - CPGLX
+!
+!---  Ice pressure  ---
+!
+      CALL ICE( TX,PLX,XLSX,TFPX,PIX )
+!
+!---  Ice saturation  ---
+!
+      CALL SP_HYDT_KE( PIX,PLX,PNX,SHX,SIX,SLX,IZN,N )
+!
+!---  Aqueous, gas, and nonaqueous liquid mole fractions  ---
+!
+      XMLAX = XMLX(1)
+      XMLOX = XMLX(2)
+      XMLNX = XMLX(3)
+      YMGAX = XMGX(1)
+      YMGOX = XMGX(2)
+      YMGNX = XMGX(3)
+      XMNAX = XMNX(1)
+      XMNOX = XMNX(2)
+      XMNNX = XMNX(3)
+      ZMCAX = ZMCX(1)
+      ZMCOX = ZMCX(2)
+      ZMCNX = ZMCX(3)
+!
+!---  Component vapor pressures  ---
+!
+      PVAX = PVX*YMGAX
+      PVOX = PVX*YMGOX
+      PVNX = PVX*YMGNX
+!
+!---  Try Ruprecht guess scheme first then least square root error
+!     scheme next  ---
+!
+      SLOOP : DO ISCMX = 1,2
+      IF( ISCMX.EQ.1 ) THEN      
+!
+!---  Ruprecht guess scheme  ---
+!
+      YMHGX(1) = 0.64*YMHX(1)
+      YMHGX(2) = 0.62*YMHX(2)
+      YMHGX(3) = 1.D+0 - YMHGX(1) - YMHGX(2)
+      IF( YMHGX(3).LT.EPSL ) YMHGX(3) = 0.D+0
+      IF( YMHX(1)/EPSL.LT.EPSL .AND. YMHX(2)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 0.D+0
+        YMHGX(2) = 0.D+0
+        YMHGX(3) = 1.D+0
+      ELSEIF( YMHX(2)/EPSL.LT.EPSL .AND. YMHX(3)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 1.D+0
+        YMHGX(2) = 0.D+0
+        YMHGX(3) = 0.D+0
+      ELSEIF( YMHX(1)/EPSL.LT.EPSL .AND. YMHX(3)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 0.D+0
+        YMHGX(2) = 1.D+0
+        YMHGX(3) = 0.D+0
+      ELSEIF( YMHX(1)/EPSL.LT.EPSL ) THEN
+        YMHGX(1) = 0.D+0
+        VARX = (YMHGX(2)+YMHGX(3))
+        YMHGX(2) = YMHGX(2)/VARX
+        YMHGX(3) = YMHGX(3)/VARS
+      ELSEIF( YMHX(2)/EPSL.LT.EPSL ) THEN
+        VARX = (YMHGX(1)+YMHGX(3))
+        YMHGX(1) = YMHGX(1)/VARX
+        YMHGX(2) = 0.D+0
+        YMHGX(3) = YMHGX(3)/VARX
+      ELSEIF( YMHX(3)/EPSL.LT.EPSL ) THEN
+        VARX = (YMHGX(1)+YMHGX(2))
+        YMHGX(1) = YMHGX(1)/VARX
+        YMHGX(2) = YMHGX(2)/VARX
+        YMHGX(3) = 0.D+0
+      ENDIF
+      ELSE
+!
+!---  Initial guesses of hydrate-gas mole fraction of formers  ---
+!
+      RMX = 1.D+20
+      IX = 0
+      JX = 0
+      DO J = 1,21
+        DO I = 1,22-J
+          YMHGX(1) = REAL(I-1)*5.D-2
+          YMHGX(2) = REAL(J-1)*5.D-2
+          YMHGX(3) = 1.D+0 - YMHGX(1) - YMHGX(2)
+          IF( YMHGX(3).LT.EPSL ) YMHGX(3) = 0.D+0
+!
+!---      Set interpretation concentrations to actuals  ---
+!
+          ZMIH_HT(1) = YMHGX(1)
+          ZMIH_HT(2) = YMHGX(2)
+          ZMIH_HT(3) = YMHGX(3)
+!
+!---      Hydrate composition at temperature and vapor mole fraction
+!         of formers  ---
+!
+          CALL HYD_X( TKX,YMHGX,XLSX,RHOHX,
+     &      XHAX,XHOX,XHNX,XHWX,XMHAX,XMHOX,XMHNX,XMHWX )
+          XMHX(1) = XMHAX
+          XMHX(2) = XMHOX
+          XMHX(3) = XMHNX
+!
+!---      Residual equations ---
+!
+          SXMHX = XMHX(1) + XMHX(2) + XMHX(3)
+          YMHAX = XMHX(1)/(SXMHX+SMALL)
+          YMHOX = XMHX(2)/(SXMHX+SMALL)
+          YMHNX = XMHX(3)/(SXMHX+SMALL)
+          GX(1,1) = YMHX(1) - XMHX(1)/(SXMHX+SMALL)
+          GX(1,2) = YMHX(2) - XMHX(2)/(SXMHX+SMALL)
+          GX(1,3) = YMHX(3) - XMHX(3)/(SXMHX+SMALL)
+          RX = SQRT( (GX(1,1)**2) + (GX(1,2)**2) + (GX(1,3)**2) )
+          IF( RX.LT.RMX ) THEN
+            RMX = RX
+            IX = I
+            JX = J
+          ENDIF
+        ENDDO
+      ENDDO
+      YMHGX(1) = REAL(IX-1)*5.D-2
+      YMHGX(2) = REAL(JX-1)*5.D-2
+      YMHGX(3) = 1.D+0 - YMHGX(1) - YMHGX(2)
+      IF( YMHGX(3).LT.EPSL ) YMHGX(3) = 0.D+0
+      ENDIF
+!
+!---  Set interpretation concentrations to actuals  ---
+!
+      ZMIH_HT(1) = YMHGX(1)
+      ZMIH_HT(2) = YMHGX(2)
+      ZMIH_HT(3) = YMHGX(3)
+!
+!---  Two-variable Newton-Raphson loop: 
+!     hydrate mole fractions  ---
+!
+      NC = 0
+  310 CONTINUE
+      NC = NC + 1
+      IF( NC.GT.32 ) THEN
+        IF( ISCMX.EQ.1 ) CYCLE SLOOP
+        INDX = 17
+        CHMSG = 'FLH_IC7: Unconverged Hydrate-Gas Mole Fraction of ' //
+     &    'Formers'
+        CALL WRMSGS( INDX )
+      ENDIF
+!
+!---  Primary variable switching scheme, selecting the components
+!     with the lowest concentrations  ---
+!
+      IF( YMHGX(3).GE.MAX( YMHGX(1),YMHGX(2) ) ) THEN
+        NX(1) = 1
+        NX(2) = 2
+        NX(3) = 3
+      ELSEIF( YMHGX(1).GE.MAX( YMHGX(2),YMHGX(3) ) ) THEN
+        NX(1) = 2
+        NX(2) = 3
+        NX(3) = 1
+      ELSE
+        NX(1) = 3
+        NX(2) = 1
+        NX(3) = 2
+      ENDIF
+      DO 330 M = 1,3
+        DO 320 NF = 1,2
+          YMHGY(NX(NF)) = YMHGX(NX(NF))
+          DYMHGX(NF) = SIGN( 1.D-6,5.D-1-YMHGX(NX(NF)) )
+  320   CONTINUE
+        IF( M.EQ.2 ) YMHGY(NX(1)) = YMHGX(NX(1)) + DYMHGX(1)
+        IF( M.EQ.3 ) YMHGY(NX(2)) = YMHGX(NX(2)) + DYMHGX(2)
+        YMHGY(NX(3)) = MIN( MAX( 1.D+0-YMHGY(NX(1))-YMHGY(NX(2)),
+     &    0.D+0 ),1.D+0 )
+!
+!---    Hydrate equilibrium pressure and hydrate composition at 
+!       temperature, vapor mole fraction of formers, and inihbitor
+!       concentration  ---
+!
+        CALL HYD_P( TKX,YMHGY,XLSX,PEQHX )
+        CALL HYD_C( TKX,YMHGY,XLSX,RHOHX,XHAX,XHOX,XHNX,XHWX,
+     &    XMHAX,XMHOX,XMHNX,XMHWX )
+        XMHX(1) = XMHAX
+        XMHX(2) = XMHOX
+        XMHX(3) = XMHNX
+!
+!---    Residual equations ---
+!
+        SXMHX = XMHX(1) + XMHX(2) + XMHX(3)
+        GX(1,M) = YMHX(NX(1)) - XMHX(NX(1))/(SXMHX+SMALL)
+        GX(2,M) = YMHX(NX(2)) - XMHX(NX(2))/(SXMHX+SMALL)
+  330 CONTINUE
+!
+!---  Load solution vector and Jacobian matrix for
+!     two-phase conditions  ---
+!
+      DO 340 M = 1,2
+        AJ(M,1) = (GX(M,2)-GX(M,1))/DYMHGX(1)
+        AJ(M,2) = (GX(M,3)-GX(M,1))/DYMHGX(2)
+        BJ(M) = -GX(M,1)
+ 340  CONTINUE
+!
+!---  Solve linear system  ---
+!
+      IF( ABS(AJ(1,1))/EPSL.LT.EPSL .OR. ABS(AJ(1,1))/EPSL.LT.EPSL )
+     &  CYCLE SLOOP
+      JP = 2
+      KP = 2
+      CALL LUDCMP( AJ,JP,KP,IJ,DJ )
+      CALL LUBKSB( AJ,JP,KP,IJ,BJ )
+!
+!---  Update primary unknowns  ---
+!
+      DO 350 NF = 1,2
+        DYMHGX(NF) = SIGN( MIN( 5.D-2,ABS(BJ(NF)) ),BJ(NF) )
+        IF( YMHX(NX(NF))/EPSL.LT.EPSL ) THEN
+          YMHGX(NX(NF)) = 0.D+0
+          DYMHGX(NF) = 0.D+0
+        ELSEIF( YMHGX(NX(NF))/EPSL.LT.EPSL 
+     &    .AND. DYMHGX(NF).LT.0.D+0 ) THEN
+          YMHGX(NX(NF)) = 0.D+0
+          DYMHGX(NF) = 0.D+0
+        ELSE
+          YMHGX(NX(NF)) = YMHGX(NX(NF)) + DYMHGX(NF)
+          YMHGX(NX(NF)) = MAX( MIN( YMHGX(NX(NF)),1.D+0 ),0.D+0 )
+        ENDIF
+  350 CONTINUE
+      SYMHGX = YMHGX(NX(1))+YMHGX(NX(2))
+      IF( (SYMHGX-1.D+0).GT.0.D+0 ) THEN
+        YMHGX(NX(1)) = YMHGX(NX(1))/SYMHGX
+        YMHGX(NX(2)) = YMHGX(NX(2))/SYMHGX
+      ENDIF
+      YMHGX(NX(3)) = MIN( MAX( 1.D+0-YMHGX(NX(1))-YMHGX(NX(2)),0.D+0 ),
+     &  1.D+0 )
+!
+!---  Convergence check  ---
+!
+      IF( ABS(DYMHGX(1)).GT.1.D-7 ) GOTO 310
+      IF( ABS(DYMHGX(2)).GT.1.D-7 ) GOTO 310
+      EXIT SLOOP
+      ENDDO SLOOP
+!
+!---  Converged solution, set interpretation concentrations 
+!     to actuals  ---
+!
+      ZMIH_HT(1) = YMHGX(1)
+      ZMIH_HT(2) = YMHGX(2)
+      ZMIH_HT(3) = YMHGX(3)
+!
+!---  Hydrate equilibrium pressure and hydrate composition at 
+!     temperature, vapor mole fraction of formers, and inhibitor
+!     concentration  ---
+!
+      CALL HYD_P( TKX,YMHGX,XLSX,PEQHX )
+      CALL HYD_C( TKX,YMHGX,XLSX,RHOHX,XHAX,XHOX,XHNX,XHWX,
+     &    XMHAX,XMHOX,XMHNX,XMHWX )
+      PVHX = PEQHX
+      PVHAX = PVHX*YMHGX(1)
+      PVHOX = PVHX*YMHGX(2)
+      PVHNX = PVHX*YMHGX(3)
+!
+!---  Hydrate properties for no-hydrate conditions  ---
+!
+      TMHAX = SHX*RHOHX*XHAX
+      TMHOX = SHX*RHOHX*XHOX
+      TMHNX = SHX*RHOHX*XHNX
+      YMHGAX = YMHGX(1)
+      YMHGOX = YMHGX(2)
+      YMHGNX = YMHGX(3)
+      TEQHX = TKX
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_IC7 group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_PC14( PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,PSOX,
+     &  PVAX,PVNX,PVOX,PVWX,RHOGX,RHONX,
+     &  RKGX,RKLX,RKNX,SHX,SIX,SGX,SLX,SLIX,SNX,TX,TCRX,TCTX,
+     &  XGAX,XGNX,XGOX,XGWX,
+     &  XNAX,XNNX,XNOX,XNWX,XMLAX,XMLNX,XMLOX,XLSX,YLSX,
+     &  YMGAX,YMGNX,YMGOX,YMNAX,YMNNX,YMNOX,
+     &  ZMCAX,ZMCOX,ZMCNX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for mobile phases
+!
+!     Inputs
+!     
+!     Temperature, C - TX
+!     Pressure, Pa (gauge) - PSOX
+!     CO2 vapor pressure, Pa absolute - PVA
+!     CH4 vapor pressure, Pa absolute - PVO
+!     N2 vapor pressure, Pa absolute - PVN
+!     Total NaCl aqueous mass fraction - YLSX
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 19 September 2012.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE PORMED
+      USE NAPL
+      USE HYST
+      USE GRID
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RKLX(3)
+      REAL*8 YMGX(LHF_HT),YMNX(LHF_HT),ZMCX(LHF_HT)
+      REAL*8 AIX(LHF_HT)
+      REAL*8 FUGLX(LHF_HT),FUGX(LHF_HT)
+      REAL*8 FKX(LHF_HT),FKLX(LHF_HT),FKUX(LHF_HT)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_PC14'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PX = PSOX + PATM
+!
+!---  Total nonaqueous component mole fractions  ---
+!
+      PMVX = PVAX + PVOX + PVNX
+      IF( PMVX/EPSL.LT.EPSL ) THEN
+        ZMCAX = 0.D+0
+        ZMCOX = 1.D+0
+        ZMCNX = 0.D+0
+      ELSE
+        ZMCAX = PVAX/PMVX
+        ZMCOX = PVOX/PMVX
+        ZMCNX = PVNX/PMVX
+      ENDIF
+      ZMCX(1) = ZMCAX
+      ZMCX(2) = ZMCOX
+      ZMCX(3) = ZMCNX
+!
+!---  Peng-Robinson temperature dependent component 
+!     coefficients  ---
+!
+      CALL PRC_T( AIX,TKX )
+!
+!---  Brine salt mass fraction  ---
+!      
+      CALL SOL_LS( TX,XLSMX )
+      XLSX = MIN( YLSX,XLSMX )
+!
+!---  Saturated water vapor pressure and brine density  ---
+!
+      CALL SP_B( TX,XLSX,PSBX )
+      PPLX = MAX( PX,PSBX )
+      CALL DENS_B( TX,PPLX,XLSX,RHOBX )
+!
+!---  Interfacial surface tensions  ---
+!
+      SIG_GL = SCHR(5,IZN)
+      SIG_NL = SCHR(6,IZN)
+      SIG_GN = SCHR(7,IZN)
+      SIG_HL = SCHR(9,IZN)
+      SIG_IL = SCHR(9,IZN)
+      IF( ISLC(7).EQ.2 .OR. ISLC(7).EQ.3 )
+     &  CALL SFT_L( TX,XLSX,SIG_GL )
+      CA_NL = ((SIG_NL**2) - (SIG_GN**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_NL)
+      CA_GN = ((SIG_GN**2) - (SIG_NL**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_GN)
+!
+!---  Interphase scaling factors  ---
+!
+      BGL = SCHR(8,IZN)/SIG_GL
+      BNL = SCHR(8,IZN)/(SIG_NL*CA_NL)
+      BGN = SCHR(8,IZN)/(SIG_GN*CA_GN)
+      BHL = SCHR(8,IZN)/SIG_HL
+      BIL = SCHR(8,IZN)/SIG_HL
+!
+!---  Entry pressure without hydrate barrier adjustment  ---
+!
+      ENPR = SCHR(2,IZN)*RHORL*GRAV
+!
+!---  Vapor pressure  ---
+!
+      CALL VPL( PSBX,PVWX,SLIX,TX,IZN )
+      PVX = PX - PVWX
+!
+!---  Water vapor molar density, kmol/m^3 ---
+!
+      ISRX = 2
+      CALL DENS_W( TX,PVWX,RHOX,RHOGWX,ISRX )
+      RHOMGWX = RHOGWX/WTMW
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = ZMCX(1)
+        YMGX(2) = ZMCX(2)
+        YMGX(3) = ZMCX(3)
+!
+!---    Liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)
+        YMNX(2) = ZMCX(2)
+        YMNX(3) = ZMCX(3)
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Phase saturations, capillary pressures, and phase pressures  ---
+!
+        SGX = 0.D+0
+        SNX = 0.D+0
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Set nonaqueous-liquid to gas conditions ---
+!
+        RHOMNX = RHOMGX
+        XMNAX = XMGAX
+        XMNOX = XMGOX
+        XMNNX = XMGNX
+        XMNWX = XMGWX
+        WTMNX = WTMGX
+        XNAX = XGAX
+        XNOX = XGOX
+        XNNX = XGNX
+        XNWX = XGWX
+        RHONX = RHOGX
+!
+!---  Nonaqueous-liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+!
+!---    Liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)
+        YMNX(2) = ZMCX(2)
+        YMNX(3) = ZMCX(3)
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = FKX(1)*ZMCX(1)
+        YMGX(2) = FKX(2)*ZMCX(2)
+        YMGX(3) = FKX(3)*ZMCX(3)
+        SYMGX = YMGX(1)+YMGX(2)+YMGX(3)
+        YMGX(1) = YMGX(1)/SYMGX        
+        YMGX(2) = YMGX(2)/SYMGX        
+        YMGX(3) = YMGX(3)/SYMGX        
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+!
+!---    Phase saturations, capillary pressures, and phase pressures  ---
+!
+        SNX = 1.D+0-SLIX-SHX
+        IF( SNX.LT.EPSL ) SNX = 0.D+0
+        SGX = 0.D+0
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PVX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PPEUX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---  Nonaqueous two-phase  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        YMNX(1) = ZMCX(1)/FKLX(1)
+        YMNX(2) = ZMCX(2)/FKLX(2)
+        YMNX(3) = ZMCX(3)/FKLX(3)
+        SYMNX = YMNX(1)+YMNX(2)+YMNX(3)
+        YMNX(1) = YMNX(1)/SYMNX
+        YMNX(2) = YMNX(2)/SYMNX
+        YMNX(3) = YMNX(3)/SYMNX
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized gas mole fractions at the upper pressure
+!       envelope  ---
+!
+        YMGX(1) = ZMCX(1)*FKUX(1)
+        YMGX(2) = ZMCX(2)*FKUX(2)
+        YMGX(3) = ZMCX(3)*FKUX(3)
+        SYMGX = YMGX(1)+YMGX(2)+YMGX(3)
+        YMGX(1) = YMGX(1)/SYMGX
+        YMGX(2) = YMGX(2)/SYMGX
+        YMGX(3) = YMGX(3)/SYMGX
+!
+!---    Beta within the two-phase envelope  ---
+!
+        CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCX )
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = BTX*ZMCX(1) + (1.D+0-BTX)*YMGX(1)
+        YMGX(2) = BTX*ZMCX(2) + (1.D+0-BTX)*YMGX(2)
+        YMGX(3) = BTX*ZMCX(3) + (1.D+0-BTX)*YMGX(3)
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+!
+!---    Liquid mole fractions ---
+!
+        YMNX(1) = BTX*YMNX(1) + (1.D+0-BTX)*ZMCX(1)
+        YMNX(2) = BTX*YMNX(2) + (1.D+0-BTX)*ZMCX(2)
+        YMNX(3) = BTX*YMNX(3) + (1.D+0-BTX)*ZMCX(3)
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PVX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Nonaqueous-liquid density, kg/m^3 ---
+!
+        RHONX = RHOMNX*WTMNX
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Volume fraction of gas  ---
+!
+        SGNX = MAX( 1.D+0-SHX-SLIX,0.D+0 )
+        STX = (BTX/RHOMGCX)/((BTX/RHOMGCX) + ((1.D+0-BTX)/RHOMNCX))
+        SGX = STX*SGNX
+        SNX = (1.D+0-STX)*SGNX
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---  Upper-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.3 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = ZMCX(1)
+        YMGX(2) = ZMCX(2)
+        YMGX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)/FKUX(1)
+        YMNX(2) = ZMCX(2)/FKUX(2)
+        YMNX(3) = ZMCX(3)/FKUX(3)
+        SYMNX = YMNX(1)+YMNX(2)+YMNX(3)
+        YMNX(1) = YMNX(1)/SYMNX
+        YMNX(2) = YMNX(2)/SYMNX
+        YMNX(3) = YMNX(3)/SYMNX
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+!
+!---    Phase saturations, capillary pressures, and phase pressures  ---
+!
+        SGX = 1.D+0-SLIX-SHX
+        IF( SGX.LT.EPSL ) SGX = 0.D+0
+        SNX = 0.D+0
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PPEUX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PPEUX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Nonaqueous-liquid density, kg/m^3 ---
+!
+        RHONX = RHOMNX*WTMNX
+!
+!---  Lower-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.4 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = ZMCX(1)
+        YMGX(2) = ZMCX(2)
+        YMGX(3) = ZMCX(3)
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)/FKLX(1)
+        YMNX(2) = ZMCX(2)/FKLX(2)
+        YMNX(3) = ZMCX(3)/FKLX(3)
+        SYMNX = YMNX(1)+YMNX(2)+YMNX(3)
+        YMNX(1) = YMNX(1)/SYMNX
+        YMNX(2) = YMNX(2)/SYMNX
+        YMNX(3) = YMNX(3)/SYMNX
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+!
+!---    Phase saturations, capillary pressures, and phase pressures  ---
+!
+        SGX = 1.D+0-SLIX-SHX
+        IF( SGX.LT.EPSL ) SGX = 0.D+0
+        SNX = 0.D+0
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PPELX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PPELX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Nonaqueous-liquid density, kg/m^3 ---
+!
+        RHONX = RHOMNX*WTMNX
+      ENDIF
+!
+!---  Ice pressure  ---
+!
+      CALL ICE( TX,PLX,XLSX,TFPX,PIX )
+!
+!---  Ice saturation  ---
+!
+      SLX = SLIX
+      CALL SP_HYDT_KE( PIX,PLX,PNX,SHX,SIX,SLX,IZN,N )
+!
+!---  CO2 solubility ---
+!
+      FUGAX = FUGX(1)*PVAX
+      CALL SOL_LA( TX,FUGAX,XLSX,XMLAX )
+!
+!---  CH4 solubility ---
+!
+      FUGOX = FUGX(2)*PVOX
+      CALL SOL_LO( TX,FUGOX,XLSX,XMLOX )
+!
+!---  N2 solubility ---
+!
+      FUGNX = FUGX(3)*PVNX
+      CALL SOL_LN( TX,FUGNX,XLSX,XMLNX )
+!
+!---  Gas relative permeability  ---
+!
+      CALL RKG_HYDT_KE( RKGX,SGX,SHX,SLX,SNX,IZN )
+!
+!---  Aqueous relative permeability  ---
+!
+      CALL RKL_HYDT_KE( RKLX,SGX,SHX,SLX,SNX,IZN )
+!
+!---  Nonaqueous-liquid relative permeability  ---
+!
+      CALL RKN_HYDT_KE( RKNX,SGX,SHX,SLX,SNX,IZN )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_PC14 group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_PC23( PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,PSOX,
+     &  PVAX,PVNX,PVOX,PVWX,RHOGX,RHONX,
+     &  RKGX,RKLX,RKNX,SHX,SIX,SGX,SLX,SLIX,SNX,TX,TCRX,TCTX,
+     &  XGAX,XGNX,XGOX,XGWX,
+     &  XNAX,XNNX,XNOX,XNWX,XMLAX,XMLNX,XMLOX,XLSX,YLSX,
+     &  YMGAX,YMGNX,YMGOX,YMNAX,YMNNX,YMNOX,
+     &  ZMCAX,ZMCOX,ZMCNX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for mobile phases
+!
+!     Inputs
+!     
+!     Temperature, C - TX
+!     Pressure, Pa (gauge) - PSOX
+!     Total nonaqueous CO2 mole fraction - ZMCAX
+!     Total nonaqueous CH4 mole fraction - ZMCOX
+!     Total nonaqueous N2 mole fraction - ZMCNX
+!     Total NaCl aqueous mass fraction - YLSX
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 19 September 2012.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE PORMED
+      USE NAPL
+      USE HYST
+      USE GRID
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RKLX(3)
+      REAL*8 YMGX(LHF_HT),YMNX(LHF_HT),ZMCX(LHF_HT)
+      REAL*8 AIX(LHF_HT)
+      REAL*8 FUGLX(LHF_HT),FUGX(LHF_HT)
+      REAL*8 FKX(LHF_HT),FKLX(LHF_HT),FKUX(LHF_HT)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_PC23'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PX = PSOX + PATM
+!
+!---  Total nonaqueous component mole fractions  ---
+!
+      ZMCX(1) = ZMCAX
+      ZMCX(2) = ZMCOX
+      ZMCX(3) = ZMCNX
+!
+!---  Peng-Robinson temperature dependent component 
+!     coefficients  ---
+!
+      CALL PRC_T( AIX,TKX )
+!
+!---  Brine salt mass fraction  ---
+!      
+      CALL SOL_LS( TX,XLSMX )
+      XLSX = MIN( YLSX,XLSMX )
+!
+!---  Saturated water vapor pressure and brine density  ---
+!
+      CALL SP_B( TX,XLSX,PSBX )
+      PPLX = MAX( PX,PSBX )
+      CALL DENS_B( TX,PPLX,XLSX,RHOBX )
+!
+!---  Interfacial surface tensions  ---
+!
+      SIG_GL = SCHR(5,IZN)
+      SIG_NL = SCHR(6,IZN)
+      SIG_GN = SCHR(7,IZN)
+      SIG_HL = SCHR(9,IZN)
+      SIG_IL = SCHR(9,IZN)
+      IF( ISLC(7).EQ.2 .OR. ISLC(7).EQ.3 )
+     &  CALL SFT_L( TX,XLSX,SIG_GL )
+      CA_NL = ((SIG_NL**2) - (SIG_GN**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_NL)
+      CA_GN = ((SIG_GN**2) - (SIG_NL**2) + (SIG_GL**2))
+     &  /(2.D+0*SIG_GL*SIG_GN)
+!
+!---  Interphase scaling factors  ---
+!
+      BGL = SCHR(8,IZN)/SIG_GL
+      BNL = SCHR(8,IZN)/(SIG_NL*CA_NL)
+      BGN = SCHR(8,IZN)/(SIG_GN*CA_GN)
+      BHL = SCHR(8,IZN)/SIG_HL
+      BIL = SCHR(8,IZN)/SIG_HL
+!
+!---  Entry pressure without hydrate barrier adjustment  ---
+!
+      ENPR = SCHR(2,IZN)*RHORL*GRAV
+!
+!---  Vapor pressure  ---
+!
+      CALL VPL( PSBX,PVWX,SLIX,TX,IZN )
+      PVX = PX - PVWX
+!
+!---  Water vapor molar density, kmol/m^3 ---
+!
+      ISRX = 2
+      CALL DENS_W( TX,PVWX,RHOX,RHOGWX,ISRX )
+      RHOMGWX = RHOGWX/WTMW
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = ZMCX(1)
+        YMGX(2) = ZMCX(2)
+        YMGX(3) = ZMCX(3)
+!
+!---    Liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)
+        YMNX(2) = ZMCX(2)
+        YMNX(3) = ZMCX(3)
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Phase saturations, capillary pressures, and phase pressures  ---
+!
+        SGX = 1.D+0-SLIX-SHX
+        IF( SGX.LT.EPSL ) SGX = 0.D+0
+        SNX = 0.D+0
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PVX*YMGAX
+        PVOX = PVX*YMGOX
+        PVNX = PVX*YMGNX
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Set nonaqueous-liquid to gas conditions ---
+!
+        RHOMNX = RHOMGX
+        XMNAX = XMGAX
+        XMNOX = XMGOX
+        XMNNX = XMGNX
+        XMNWX = XMGWX
+        WTMNX = WTMGX
+        XNAX = XGAX
+        XNOX = XGOX
+        XNNX = XGNX
+        XNWX = XGWX
+        RHONX = RHOGX
+!
+!---  Nonaqueous-liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+!
+!---    Liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)
+        YMNX(2) = ZMCX(2)
+        YMNX(3) = ZMCX(3)
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = FKX(1)*ZMCX(1)
+        YMGX(2) = FKX(2)*ZMCX(2)
+        YMGX(3) = FKX(3)*ZMCX(3)
+        SYMGX = YMGX(1)+YMGX(2)+YMGX(3)
+        YMGX(1) = YMGX(1)/SYMGX        
+        YMGX(2) = YMGX(2)/SYMGX        
+        YMGX(3) = YMGX(3)/SYMGX        
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PPEUX*YMGAX
+        PVOX = PPEUX*YMGOX
+        PVNX = PPEUX*YMGNX
+!
+!---    Phase saturations, capillary pressures, and phase pressures  ---
+!
+        SNX = 1.D+0-SLIX-SHX
+        IF( SNX.LT.EPSL ) SNX = 0.D+0
+        SGX = 0.D+0
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PVX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PPEUX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---  Nonaqueous two-phase  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        YMNX(1) = ZMCX(1)/FKLX(1)
+        YMNX(2) = ZMCX(2)/FKLX(2)
+        YMNX(3) = ZMCX(3)/FKLX(3)
+        SYMNX = YMNX(1)+YMNX(2)+YMNX(3)
+        YMNX(1) = YMNX(1)/SYMNX
+        YMNX(2) = YMNX(2)/SYMNX
+        YMNX(3) = YMNX(3)/SYMNX
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized gas mole fractions at the upper pressure
+!       envelope  ---
+!
+        YMGX(1) = ZMCX(1)*FKUX(1)
+        YMGX(2) = ZMCX(2)*FKUX(2)
+        YMGX(3) = ZMCX(3)*FKUX(3)
+        SYMGX = YMGX(1)+YMGX(2)+YMGX(3)
+        YMGX(1) = YMGX(1)/SYMGX
+        YMGX(2) = YMGX(2)/SYMGX
+        YMGX(3) = YMGX(3)/SYMGX
+!
+!---    Beta within the two-phase envelope  ---
+!
+        CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCX )
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = BTX*ZMCX(1) + (1.D+0-BTX)*YMGX(1)
+        YMGX(2) = BTX*ZMCX(2) + (1.D+0-BTX)*YMGX(2)
+        YMGX(3) = BTX*ZMCX(3) + (1.D+0-BTX)*YMGX(3)
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PVX*YMGAX
+        PVOX = PVX*YMGOX
+        PVNX = PVX*YMGNX
+!
+!---    Liquid mole fractions ---
+!
+        YMNX(1) = BTX*YMNX(1) + (1.D+0-BTX)*ZMCX(1)
+        YMNX(2) = BTX*YMNX(2) + (1.D+0-BTX)*ZMCX(2)
+        YMNX(3) = BTX*YMNX(3) + (1.D+0-BTX)*ZMCX(3)
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PVX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Nonaqueous-liquid density, kg/m^3 ---
+!
+        RHONX = RHOMNX*WTMNX
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Volume fraction of gas  ---
+!
+        SGNX = 1.D+0-SHX-SLIX
+        IF( SGNX.LT.EPSL ) SGNX = 0.D+0
+        STX = (BTX/RHOMGCX)/((BTX/RHOMGCX) + ((1.D+0-BTX)/RHOMNCX))
+        SGX = STX*SGNX
+        SNX = (1.D+0-STX)*SGNX
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---  Upper-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.3 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = ZMCX(1)
+        YMGX(2) = ZMCX(2)
+        YMGX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)/FKUX(1)
+        YMNX(2) = ZMCX(2)/FKUX(2)
+        YMNX(3) = ZMCX(3)/FKUX(3)
+        SYMNX = YMNX(1)+YMNX(2)+YMNX(3)
+        YMNX(1) = YMNX(1)/SYMNX
+        YMNX(2) = YMNX(2)/SYMNX
+        YMNX(3) = YMNX(3)/SYMNX
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PVX*YMGAX
+        PVOX = PVX*YMGOX
+        PVNX = PVX*YMGNX
+!
+!---    Phase saturations, capillary pressures, and phase pressures  ---
+!
+        SGX = 1.D+0-SLIX-SHX
+        IF( SGX.LT.EPSL ) SGX = 0.D+0
+        SNX = 0.D+0
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PPEUX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PPEUX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Nonaqueous-liquid density, kg/m^3 ---
+!
+        RHONX = RHOMNX*WTMNX
+!
+!---  Lower-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.4 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = ZMCX(1)
+        YMGX(2) = ZMCX(2)
+        YMGX(3) = ZMCX(3)
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)/FKLX(1)
+        YMNX(2) = ZMCX(2)/FKLX(2)
+        YMNX(3) = ZMCX(3)/FKLX(3)
+        SYMNX = YMNX(1)+YMNX(2)+YMNX(3)
+        YMNX(1) = YMNX(1)/SYMNX
+        YMNX(2) = YMNX(2)/SYMNX
+        YMNX(3) = YMNX(3)/SYMNX
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PVX*YMGAX
+        PVOX = PVX*YMGOX
+        PVNX = PVX*YMGNX
+!
+!---    Phase saturations, capillary pressures, and phase pressures  ---
+!
+        SGX = 1.D+0-SLIX-SHX
+        IF( SGX.LT.EPSL ) SGX = 0.D+0
+        SNX = 0.D+0
+        CALL CAP_HYDT_KE( CPGLX,CPGNX,CPNLX,SHX,SLIX,SNX,IZN,N )
+        IF( SGX.LT.EPSL .AND. SNX.LT.EPSL ) THEN
+          PLX = PSOX
+          PGX = PLX + CPGLX
+          PNX = PLX + CPNLX
+        ELSEIF( SGX.LT.EPSL .AND. SNX.GT.EPSL ) THEN
+          PNX = PSOX
+          PGX = PNX + CPGNX
+          PLX = PNX - CPNLX
+        ELSE
+          PGX = PSOX
+          PNX = PGX - CPGNX
+          PLX = PNX - CPNLX
+        ENDIF
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PPELX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PPELX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Nonaqueous-liquid density, kg/m^3 ---
+!
+        RHONX = RHOMNX*WTMNX
+      ENDIF
+!
+!---  Ice pressure  ---
+!
+      CALL ICE( TX,PLX,XLSX,TFPX,PIX )
+!
+!---  Ice saturation  ---
+!
+      SLX = SLIX
+      CALL SP_HYDT_KE( PIX,PLX,PNX,SHX,SIX,SLX,IZN,N )
+!
+!---  CO2 solubility ---
+!
+      FUGAX = FUGX(1)*PVAX
+      CALL SOL_LA( TX,FUGAX,XLSX,XMLAX )
+!
+!---  CH4 solubility ---
+!
+      FUGOX = FUGX(2)*PVOX
+      CALL SOL_LO( TX,FUGOX,XLSX,XMLOX )
+!
+!---  N2 solubility ---
+!
+      FUGNX = FUGX(3)*PVNX
+      CALL SOL_LN( TX,FUGNX,XLSX,XMLNX )
+!
+!---  Gas relative permeability  ---
+!
+      CALL RKG_HYDT_KE( RKGX,SGX,SHX,SLX,SNX,IZN )
+!
+!---  Aqueous relative permeability  ---
+!
+      CALL RKL_HYDT_KE( RKLX,SGX,SHX,SLX,SNX,IZN )
+!
+!---  Nonaqueous-liquid relative permeability  ---
+!
+      CALL RKN_HYDT_KE( RKNX,SGX,SHX,SLX,SNX,IZN )
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_PC23 group  ---
+!
+      RETURN
+      END
+
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_PC10( PEQHX,PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,PSOX,
+     &  PVAX,PVHAX,PVNX,PVHNX,PVOX,PVHOX,PVWX,RHOGX,RHOHX,RHONX,
+     &  RKGX,RKLX,RKNX,SHX,SIX,SGX,SLX,SLIX,SNX,TX,TCRX,TCTX,TEQHX,
+     &  XGAX,XGNX,XGOX,XGWX,XHAX,XHNX,XHOX,XHWX,
+     &  XNAX,XNNX,XNOX,XNWX,XMLAX,XMLNX,XMLOX,XLSX,YLSX,
+     &  YMGAX,YMGNX,YMGOX,YMHGAX,YMHGNX,YMHGOX,YMNAX,YMNNX,YMNOX,
+     &  ZMCAX,ZMCOX,ZMCNX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for phase condition #10 (10 series)  ---
+!
+!     SH = 0, SG + SN = 0, SL = 1
+!
+!     energy - temperature, C - T
+!     water mass - pressure, Pa (gauge) - PSO
+!     mobile CO2 mass - CO2 vapor pressure, Pa absolute - PVA
+!     mobile CH4 mass - CH4 vapor pressure, Pa absolute - PVO
+!     mobile N2 mass - N2 vapor pressure, Pa absolute - PVN
+!     hydrate CO2 mass - hydrate CO2 mass, kg - TMHA
+!     hydrate CH4 mass - hydrate CH4 mass, kg - TMHO
+!     hydrate N2 mass - hydrate N2 mass, kg - TMHN
+!     NaCl mass - total NaCl aqueous mass fraction - YLS
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 18 September 2012.
+!     Last Modified by MD White, PNNL, 18 September 2012.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE GRID
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RKLX(3)
+      REAL*8 YMHGX(LHF_HT)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_PC10'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PLX = PSOX
+      PX = PSOX + PATM
+!
+!---  Aqueous saturation  ---
+!
+      SLIX = 1.D+0
+!
+!---  Mobile phases  ---
+!
+      CALL FLH_PC14( PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,PSOX,
+     &  PVAX,PVNX,PVOX,PVWX,RHOGX,RHONX,
+     &  RKGX,RKLX,RKNX,SHX,SIX,SGX,SLX,SLIX,SNX,TX,TCRX,TCTX,
+     &  XGAX,XGNX,XGOX,XGWX,
+     &  XNAX,XNNX,XNOX,XNWX,XMLAX,XMLNX,XMLOX,XLSX,YLSX,
+     &  YMGAX,YMGNX,YMGOX,YMNAX,YMNNX,YMNOX,
+     &  ZMCAX,ZMCOX,ZMCNX,IZN,N,NP_HT )
+!
+!---  Hydrate properties for no-hydrate conditions  ---
+!
+      YMHGAX = 0.D+0
+      YMHGOX = 1.D+0
+      YMHGNX = 0.D+0
+      TEQHX = -TABS
+      XHAX = 0.D+0
+      XHOX = 0.D+0
+      XHNX = 0.D+0
+      XHWX = 1.D+0
+      RHOHX = 0.D+0
+      SHX = 0.D+0
+!
+!---  Hydrate equilibrium temperature at the vapor 
+!     pressure conditions  ---
+!
+      PVHAX = PVAX
+      PVHOX = PVOX
+      PVHNX = PVNX
+      PVHX = PVHAX+PVHOX+PVHNX
+      IF( PVHX.GT.EPSL ) THEN
+        YMHGX(1) = PVHAX/PVHX
+        YMHGX(2) = PVHOX/PVHX
+        YMHGX(3) = PVHNX/PVHX
+        YMHGAX = YMHGX(1)
+        YMHGOX = YMHGX(2)
+        YMHGNX = YMHGX(3)
+!
+!---    Hydrate equilibrium pressure as a function of temperature,
+!       vapor mole fractions, and inhibitor concentration  ---
+!
+        CALL HYD_P( TKX,YMHGX,XLSX,PEQHX )
+!
+!---    Hydrate composition at temperature,
+!       vapor mole fractions, and inhibitor concentration  ---
+!
+        IF( PVHX.GE.PEQHX ) THEN
+          CALL HYD_C( TKX,YMHGX,XLSX,RHOHX,XHAX,XHOX,
+     &      XHNX,XHWX,XMHAX,XMHOX,XMHNX,XMHWX )
+          PVHAX = YMHGX(1)*PVHX
+          PVHOX = YMHGX(2)*PVHX
+          PVHNX = YMHGX(3)*PVHX
+        ENDIF
+      ENDIF
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_PC10 group  ---
+!
+      RETURN
+      END
+      
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_PC20( PEQHX,PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,PSOX,
+     &  PVAX,PVHAX,PVNX,PVHNX,PVOX,PVHOX,PVWX,RHOGX,RHOHX,
+     &  RKGX,RKLX,RKNX,SHX,SIX,SGX,SLX,SLIX,SNX,TX,TCRX,TCTX,TEQHX,
+     &  XGAX,XGNX,XGOX,XGWX,XHAX,XHNX,XHOX,XHWX,
+     &  XNAX,XNNX,XNOX,XNWX,XMLAX,XMLNX,XMLOX,XLSX,YLSX,
+     &  YMGAX,YMGNX,YMGOX,YMHGAX,YMHGNX,YMHGOX,YMNAX,YMNNX,YMNOX,
+     &  ZMCAX,ZMCOX,ZMCNX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for phase condition 21 through 23 (20 series)  ---
+!
+!     SH = 0, SG + SN > 0, SL < 1
+!     ZMCA = MAX( ZMCA,ZMCO,ZMCN ) #21
+!     ZMCO = MAX( ZMCA,ZMCO,ZMCN ) #22
+!     ZMCN = MAX( ZMCA,ZMCO,ZMCN ) #23
+!
+!     energy - temperature, C - T
+!     water mass - aqueous saturation - SL
+!     maximum mobile mass component - pressure, Pa (gauge) - PSO
+!     mobile CO2 mass - total nonaqueous CH4 mole fraction - ZMCA
+!     mobile CH4 mass - total nonaqueous CH4 mole fraction - ZMCO
+!     mobile N2 mass - total nonaqueous N2 mole fraction - ZMCN
+!     hydrate CO2 mass - hydrate CO2 mass, kg - TMHA
+!     hydrate CH4 mass - hydrate CH4 mass, kg - TMHO
+!     hydrate N2 mass - hydrate N2 mass, kg - TMHN
+!     NaCl mass - total NaCl aqueous mass fraction - YLS
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 18 September 2012.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE GRID
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RKLX(3)
+      REAL*8 YMHGX(LHF_HT)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_PC20'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PX = PSOX + PATM
+!
+!---  Mobile phases  ---
+!
+      CALL FLH_PC23( PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,PSOX,
+     &  PVAX,PVNX,PVOX,PVWX,RHOGX,RHOHX,
+     &  RKGX,RKLX,RKNX,SHX,SIX,SGX,SLX,SLIX,SNX,TX,TCRX,TCTX,
+     &  XGAX,XGNX,XGOX,XGWX,
+     &  XNAX,XNNX,XNOX,XNWX,XMLAX,XMLNX,XMLOX,XLSX,YLSX,
+     &  YMGAX,YMGNX,YMGOX,YMNAX,YMNNX,YMNOX,
+     &  ZMCAX,ZMCOX,ZMCNX,IZN,N,NP_HT )
+!
+!---  Hydrate properties for no-hydrate conditions  ---
+!
+      YMHGAX = 0.D+0
+      YMHGOX = 1.D+0
+      YMHGNX = 0.D+0
+      TEQHX = -TABS
+      XHAX = 0.D+0
+      XHOX = 0.D+0
+      XHNX = 0.D+0
+      XHWX = 1.D+0
+      RHOHX = 0.D+0
+      SHX = 0.D+0
+!
+!---  Hydrate equilibrium temperature at the vapor 
+!     pressure conditions  ---
+!
+      PVHAX = PVAX
+      PVHOX = PVOX
+      PVHNX = PVNX
+      PVHX = PVHAX+PVHOX+PVHNX
+      IF( PVHX.GT.EPSL ) THEN
+        YMHGX(1) = PVHAX/PVHX
+        YMHGX(2) = PVHOX/PVHX
+        YMHGX(3) = PVHNX/PVHX
+        YMHGAX = YMHGX(1)
+        YMHGOX = YMHGX(2)
+        YMHGNX = YMHGX(3)
+!
+!---    Hydrate equilibrium pressure as a function of temperature,
+!       vapor mole fractions, and inhibitor concentration  ---
+!
+        CALL HYD_P( TKX,YMHGX,XLSX,PEQHX )
+!
+!---    Hydrate composition at temperature,
+!       vapor mole fractions, and inhibitor concentration  ---
+!
+        IF( PVHX.GE.PEQHX ) THEN
+          CALL HYD_C( TKX,YMHGX,XLSX,RHOHX,XHAX,XHOX,
+     &      XHNX,XHWX,XMHAX,XMHOX,XMHNX,XMHWX )
+          PVHAX = YMHGX(1)*PVHX
+          PVHOX = YMHGX(2)*PVHX
+          PVHNX = YMHGX(3)*PVHX
+        ENDIF
+      ENDIF
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_PC20 group  ---
+!
+      RETURN
+      END
+      
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_PC30( PEQHX,PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,PSOX,
+     &  PVAX,PVHAX,PVNX,PVHNX,PVOX,PVHOX,PVWX,RHOGX,RHOHX,RHONX,
+     &  RKGX,RKLX,RKNX,SHX,SIX,SGX,SLX,SLIX,SNX,TX,TCRX,TCTX,TEQHX,
+     &  TMHAX,TMHNX,TMHOX,XGAX,XGNX,XGOX,XGWX,XHAX,XHNX,XHOX,XHWX,
+     &  XNAX,XNNX,XNOX,XNWX,XMLAX,XMLNX,XMLOX,XLSX,YLSX,
+     &  YMGAX,YMGNX,YMGOX,YMHGAX,YMHGNX,YMHGOX,YMNAX,YMNNX,YMNOX,
+     &  ZMCAX,ZMCOX,ZMCNX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for phase condition #31 through #39 (30 series)  ---
+!
+!     SH > 0, SG + SN > 0, SL < 1
+!     ZMCA = MAX( ZMCA,ZMCO,ZMCN )
+!       YMHGA = MAX( YMHGA,YMHGO,YMHGN ) #31
+!       YMHGO = MAX( YMHGA,YMHGO,YMHGN ) #32
+!       YMHGN = MAX( YMHGA,YMHGO,YMHGN ) #33
+!     ZMCO = MAX( ZMCA,ZMCO,ZMCN )
+!       YMHGA = MAX( YMHGA,YMHGO,YMHGN ) #34
+!       YMHGO = MAX( YMHGA,YMHGO,YMHGN ) #35
+!       YMHGN = MAX( YMHGA,YMHGO,YMHGN ) #36
+!     ZMCN = MAX( ZMCA,ZMCO,ZMCN )
+!       YMHGA = MAX( YMHGA,YMHGO,YMHGN ) #37
+!       YMHGO = MAX( YMHGA,YMHGO,YMHGN ) #38
+!       YMHGN = MAX( YMHGA,YMHGO,YMHGN ) #39
+!
+!     energy - temperature, C - T
+!     water mass - aqueous saturation, SL
+!     maximum mobile mass component - pressure, Pa (gauge) - PSO
+!     mobile CO2 mass - total nonaqueous CH4 mole fraction - ZMCA
+!     mobile CH4 mass - total nonaqueous CH4 mole fraction - ZMCO
+!     mobile N2 mass - total nonaqueous N2 mole fraction - ZMCN
+!     maximum hydrate mass component - hydrate saturation - SH
+!     hydrate CO2 mass - hyd-gas CH4 mole frac. of formers - YMHGA
+!     hydrate CH4 mass - hyd-gas CH4 mole frac. of formers - YMHGO
+!     hydrate N2 mass - hyd-gas N2 mole frac. of formers - YMHGN
+!     NaCl mass - total NaCl aqueous mass fraction - YLS
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 18 September 2012.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE GRID
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RKLX(3)
+      REAL*8 YMHGX(LHF_HT)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_PC30'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PX = PSOX + PATM
+!
+!---  Mobile phases  ---
+!
+      CALL FLH_PC23( PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,PSOX,
+     &  PVAX,PVNX,PVOX,PVWX,RHOGX,RHONX,
+     &  RKGX,RKLX,RKNX,SHX,SIX,SGX,SLX,SLIX,SNX,TX,TCRX,TCTX,
+     &  XGAX,XGNX,XGOX,XGWX,
+     &  XNAX,XNNX,XNOX,XNWX,XMLAX,XMLNX,XMLOX,XLSX,YLSX,
+     &  YMGAX,YMGNX,YMGOX,YMNAX,YMNNX,YMNOX,
+     &  ZMCAX,ZMCOX,ZMCNX,IZN,N,NP_HT )
+!
+!---  Hydrate-gas mole fraction of formers  ---
+!
+      YMHGX(1) = YMHGAX
+      YMHGX(2) = YMHGOX
+      YMHGX(3) = YMHGNX
+!
+!---  Hydrate equilibrium pressure and hydrate composition at 
+!     temperature and vapor mole fraction of formers, interpretation
+!     concentrations set outside of this routine  ---
+!
+      CALL HYD_P( TKX,YMHGX,XLSX,PEQHX )
+      CALL HYD_C( TKX,YMHGX,XLSX,RHOHX,XHAX,XHOX,XHNX,XHWX,
+     &    XMHAX,XMHOX,XMHNX,XMHWX )
+      PVHX = PEQHX
+      PVHAX = PVHX*YMHGX(1)
+      PVHOX = PVHX*YMHGX(2)
+      PVHNX = PVHX*YMHGX(3)
+!
+!---  Hydrate mass of formers  ---
+!
+      TMHAX = SHX*RHOHX*XHAX
+      TMHOX = SHX*RHOHX*XHOX
+      TMHNX = SHX*RHOHX*XHNX
+      TEQHX = TKX
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_PC30 group  ---
+!
+      RETURN
+      END
+      
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_PC40( PEQHX,PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,PSOX,
+     &  PVAX,PVHAX,PVNX,PVHNX,PVOX,PVHOX,PVWX,RHOGX,RHOHX,RHONX,
+     &  RKGX,RKLX,RKNX,SHX,SIX,SGX,SLX,SLIX,SNX,TX,TCRX,TCTX,TEQHX,
+     &  TMHAX,TMHNX,TMHOX,XGAX,XGNX,XGOX,XGWX,XHAX,XHNX,XHOX,XHWX,
+     &  XNAX,XNNX,XNOX,XNWX,XMLAX,XMLNX,XMLOX,XLSX,YLSX,
+     &  YMGAX,YMGNX,YMGOX,YMHGAX,YMHGNX,YMHGOX,YMNAX,YMNNX,YMNOX,
+     &  ZMCAX,ZMCOX,ZMCNX,IZN,N,NP_HT )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Phase conditions #41 through #43 (40 series)  ---
+!
+!     SH > 0, SG + SN = 0, SL < 1
+!     YMHGA = MAX( YMHGA,YMHGO,YMHGN ) #41
+!     YMHGO = MAX( YMHGA,YMHGO,YMHGN ) #42
+!     YMHGN = MAX( YMHGA,YMHGO,YMHGN ) #43
+!
+!     energy - temperature, C - T
+!     water mass - pressure, Pa (gauge) - PSO
+!     mobile CO2 mass - CO2 vapor pressure, Pa absolute - PVA
+!     mobile CH4 mass - CH4 vapor pressure, Pa absolute - PVO
+!     mobile N2 mass - N2 vapor pressure, Pa absolute - PVN
+!     maximum hydrate mass component - hydrate saturation - SH
+!     hydrate CO2 mass - hyd-gas CH4 mole frac. of formers - YMHGA
+!     hydrate CH4 mass - hyd-gas CH4 mole frac. of formers - YMHGO
+!     hydrate N2 mass - hyd-gas N2 mole frac. of formers - YMHGN
+!     NaCl mass - total NaCl aqueous mass fraction - YLS
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 18 September 2012.
+!     Last Modified by MD White, PNNL, 18 September 2012.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE GRID
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 RKLX(3)
+      REAL*8 YMHGX(LHF_HT)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_PC40'
+      N_DB = N
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PLX = PSOX
+      PX = PSOX + PATM
+!
+!---  Aqueous + ice saturation  ---
+!
+      SLIX = 1.D+0-SHX
+!
+!---  Mobile phases  ---
+!
+      CALL FLH_PC14( PGX,PIX,PLX,PNX,PPELX,PPEUX,PSBX,PSOX,
+     &  PVAX,PVNX,PVOX,PVWX,RHOGX,RHONX,
+     &  RKGX,RKLX,RKNX,SHX,SIX,SGX,SLX,SLIX,SNX,TX,TCRX,TCTX,
+     &  XGAX,XGNX,XGOX,XGWX,
+     &  XNAX,XNNX,XNOX,XNWX,XMLAX,XMLNX,XMLOX,XLSX,YLSX,
+     &  YMGAX,YMGNX,YMGOX,YMNAX,YMNNX,YMNOX,
+     &  ZMCAX,ZMCOX,ZMCNX,IZN,N,NP_HT )
+!
+!---  Hydrate-gas mole fraction of formers  ---
+!
+      YMHGX(1) = YMHGAX
+      YMHGX(2) = YMHGOX
+      YMHGX(3) = YMHGNX
+!
+!---  Hydrate equilibrium pressure and hydrate composition at 
+!     temperature and vapor mole fraction of formers, interpretation
+!     concentrations set outside of this routine  ---
+!
+      CALL HYD_P( TKX,YMHGX,XLSX,PEQHX )
+      CALL HYD_C( TKX,YMHGX,XLSX,RHOHX,XHAX,XHOX,XHNX,XHWX,
+     &    XMHAX,XMHOX,XMHNX,XMHWX )
+      PVHX = PEQHX
+      PVHAX = PVHX*YMHGX(1)
+      PVHOX = PVHX*YMHGX(2)
+      PVHNX = PVHX*YMHGX(3)
+!
+!---  Hydrate mass of formers  ---
+!
+      TMHAX = SHX*RHOHX*XHAX
+      TMHOX = SHX*RHOHX*XHOX
+      TMHNX = SHX*RHOHX*XHNX
+      TEQHX = TKX
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_PC40 group  ---
+!
+      RETURN
+      END
+      
+!----------------------Subroutine--------------------------------------!
+!
+      SUBROUTINE FLH_SR1( PPELX,PPEUX,PSOX,PVAX,PVNX,PVOX,PVWX,RHOGX,
+     &  RHONX,SGX,SNX,TX,TCRX,TCTX,XGAX,XGNX,XGOX,XGWX,
+     &  XNAX,XNNX,XNOX,XNWX,YMGAX,YMGNX,YMGOX,
+     &  YMNAX,YMNNX,YMNOX,ZMCAX,ZMCOX,ZMCNX )
+!
+!-------------------------Disclaimer-----------------------------------!
+!
+!     This material was prepared as an account of work sponsored by
+!     an agency of the United States Government. Neither the
+!     United States Government nor the United States Department of
+!     Energy, nor Battelle, nor any of their employees, makes any
+!     warranty, express or implied, or assumes any legal liability or
+!     responsibility for the accuracy, completeness, or usefulness
+!     of any information, apparatus, product, software or process
+!     disclosed, or represents that its use would not infringe
+!     privately owned rights.
+!
+!----------------------Acknowledgement---------------------------------!
+!
+!     This software and its documentation were produced with Government
+!     support under Contract Number DE-AC06-76RLO-1830 awarded by the
+!     United Department of Energy. The Government retains a paid-up
+!     non-exclusive, irrevocable worldwide license to reproduce,
+!     prepare derivative works, perform publicly and display publicly
+!     by or for the Government, including the right to distribute to
+!     other Government contractors.
+!
+!---------------------Copyright Notices--------------------------------!
+!
+!            Copyright Battelle Memorial Institute, 1996
+!                    All Rights Reserved.
+!
+!----------------------Description-------------------------------------!
+!
+!     Flash calculation for nonaqueous fluid sources
+!
+!     Inputs
+!     
+!     Temperature, C - TX
+!     Water vapor pressure, Pa absolute - PVWX
+!     Total nonaqueous pressure, Pa absolute - PSOX
+!     Total nonaqueous CO2 mole fraction - ZMCAX
+!     Total nonaqueous CH4 mole fraction - ZMCOX
+!     Total nonaqueous N2 mole fraction - ZMCNX
+!
+!----------------------Authors-----------------------------------------!
+!
+!     Written by MD White, PNNL, 29 January 2013.
+!
+!----------------------Fortran 90 Modules------------------------------!
+!
+      USE GLB_PAR
+      USE SOLTN
+      USE NAPL
+      USE CONST
+!
+!----------------------Implicit Double Precision-----------------------!
+!
+      IMPLICIT REAL*8 (A-H,O-Z)
+      IMPLICIT INTEGER (I-N)
+!
+!----------------------Type Declarations-------------------------------!
+!
+      REAL*8 YMGX(LHF_HT),YMNX(LHF_HT),ZMCX(LHF_HT)
+      REAL*8 AIX(LHF_HT)
+      REAL*8 FUGLX(LHF_HT),FUGX(LHF_HT)
+      REAL*8 FKX(LHF_HT),FKLX(LHF_HT),FKUX(LHF_HT)
+!
+!----------------------Executable Lines--------------------------------!
+!
+      ISUB_LOG = ISUB_LOG+1
+      SUB_LOG(ISUB_LOG) = '/FLH_SR1'
+!
+!---  Absolute temperature and pressure  ---
+!
+      TKX = TX + TABS
+      PX = PSOX + PATM
+      PVX = PX - PVWX
+!
+!---  Total nonaqueous component mole fractions  ---
+!
+      ZMCX(1) = ZMCAX
+      ZMCX(2) = ZMCOX
+      ZMCX(3) = ZMCNX
+!
+!---  Peng-Robinson temperature dependent component 
+!     coefficients  ---
+!
+      CALL PRC_T( AIX,TKX )
+!
+!---  Water vapor molar density, kmol/m^3 ---
+!
+      ISRX = 2
+      CALL DENS_W( TX,PVWX,RHOX,RHOGWX,ISRX )
+      RHOMGWX = RHOGWX/WTMW
+!
+!---  Determine phase state of nonaqueous phases  ---
+!
+      CALL P_STATE( TCRX,TCTX,TKX,PPELX,PPEUX,PVX,ZMCX,NP_HT )
+!
+!---  Nonaqueous gas phase  ---
+!
+      IF( NP_HT.EQ.0 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = ZMCX(1)
+        YMGX(2) = ZMCX(2)
+        YMGX(3) = ZMCX(3)
+!
+!---    Liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)
+        YMNX(2) = ZMCX(2)
+        YMNX(3) = ZMCX(3)
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PVX*YMGAX
+        PVOX = PVX*YMGOX
+        PVNX = PVX*YMGNX
+!
+!---    Phase saturations  ---
+!
+        SGX = 1.D+0
+        SNX = 0.D+0
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Set nonaqueous-liquid to gas conditions ---
+!
+        RHOMNX = RHOMGX
+        XMNAX = XMGAX
+        XMNOX = XMGOX
+        XMNNX = XMGNX
+        XMNWX = XMGWX
+        WTMNX = WTMGX
+        XNAX = XGAX
+        XNOX = XGOX
+        XNNX = XGNX
+        XNWX = XGWX
+        RHONX = RHOGX
+!
+!---  Nonaqueous-liquid phase  ---
+!
+      ELSEIF( NP_HT.EQ.1 ) THEN
+!
+!---    Liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)
+        YMNX(2) = ZMCX(2)
+        YMNX(3) = ZMCX(3)
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = FKX(1)*ZMCX(1)
+        YMGX(2) = FKX(2)*ZMCX(2)
+        YMGX(3) = FKX(3)*ZMCX(3)
+        SYMGX = YMGX(1)+YMGX(2)+YMGX(3)
+        YMGX(1) = YMGX(1)/SYMGX        
+        YMGX(2) = YMGX(2)/SYMGX        
+        YMGX(3) = YMGX(3)/SYMGX        
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PPEUX*YMGAX
+        PVOX = PPEUX*YMGOX
+        PVNX = PPEUX*YMGNX
+!
+!---    Phase saturations  ---
+!
+        SNX = 1.D+0
+        SGX = 0.D+0
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PVX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PPEUX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PPEUX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---  Nonaqueous two-phase  ---
+!
+      ELSEIF( NP_HT.EQ.2 ) THEN
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKLX )
+!
+!---    Normalized liquid mole fractions at the lower pressure
+!       envelope  ---
+!
+        YMNX(1) = ZMCX(1)/FKLX(1)
+        YMNX(2) = ZMCX(2)/FKLX(2)
+        YMNX(3) = ZMCX(3)/FKLX(3)
+        SYMNX = YMNX(1)+YMNX(2)+YMNX(3)
+        YMNX(1) = YMNX(1)/SYMNX
+        YMNX(2) = YMNX(2)/SYMNX
+        YMNX(3) = YMNX(3)/SYMNX
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKUX )
+!
+!---    Normalized gas mole fractions at the upper pressure
+!       envelope  ---
+!
+        YMGX(1) = ZMCX(1)*FKUX(1)
+        YMGX(2) = ZMCX(2)*FKUX(2)
+        YMGX(3) = ZMCX(3)*FKUX(3)
+        SYMGX = YMGX(1)+YMGX(2)+YMGX(3)
+        YMGX(1) = YMGX(1)/SYMGX
+        YMGX(2) = YMGX(2)/SYMGX
+        YMGX(3) = YMGX(3)/SYMGX
+!
+!---    Beta within the two-phase envelope  ---
+!
+        CALL KF_2PE( BTX,PPELX,PPEUX,PVX,TCTX,TKX,ZMCX )
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = BTX*ZMCX(1) + (1.D+0-BTX)*YMGX(1)
+        YMGX(2) = BTX*ZMCX(2) + (1.D+0-BTX)*YMGX(2)
+        YMGX(3) = BTX*ZMCX(3) + (1.D+0-BTX)*YMGX(3)
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PVX*YMGAX
+        PVOX = PVX*YMGOX
+        PVNX = PVX*YMGNX
+!
+!---    Liquid mole fractions ---
+!
+        YMNX(1) = BTX*YMNX(1) + (1.D+0-BTX)*ZMCX(1)
+        YMNX(2) = BTX*YMNX(2) + (1.D+0-BTX)*ZMCX(2)
+        YMNX(3) = BTX*YMNX(3) + (1.D+0-BTX)*ZMCX(3)
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PVX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PVX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Nonaqueous-liquid density, kg/m^3 ---
+!
+        RHONX = RHOMNX*WTMNX
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Volume fraction of gas  ---
+!
+        STX = (BTX/RHOMGCX)/((BTX/RHOMGCX) + ((1.D+0-BTX)/RHOMNCX))
+        SGX = STX
+        SNX = (1.D+0-STX)
+!
+!---  Upper-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.3 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = ZMCX(1)
+        YMGX(2) = ZMCX(2)
+        YMGX(3) = ZMCX(3)
+!
+!---    K-factors at the upper pressure envelope  ---
+!
+        CALL KF_UPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)/FKLX(1)
+        YMNX(2) = ZMCX(2)/FKLX(2)
+        YMNX(3) = ZMCX(3)/FKLX(3)
+        SYMNX = YMNX(1)+YMNX(2)+YMNX(3)
+        YMNX(1) = YMNX(1)/SYMNX
+        YMNX(2) = YMNX(2)/SYMNX
+        YMNX(3) = YMNX(3)/SYMNX
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PVX*YMGAX
+        PVOX = PVX*YMGOX
+        PVNX = PVX*YMGNX
+!
+!---    Phase saturations  ---
+!
+        SGX = 1.D+0
+        SNX = 0.D+0
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PPEUX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PPEUX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Nonaqueous-liquid density, kg/m^3 ---
+!
+        RHONX = RHOMNX*WTMNX
+!
+!---  Lower-phase-envelope-gas phase  ---
+!
+      ELSEIF( NP_HT.EQ.4 ) THEN
+!
+!---    Gas mole fractions ---
+!
+        YMGX(1) = ZMCX(1)
+        YMGX(2) = ZMCX(2)
+        YMGX(3) = ZMCX(3)
+!
+!---    K-factors at the lower pressure envelope  ---
+!
+        CALL KF_LPE( TCTX,TKX,ZMCX,FKX )
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        YMNX(1) = ZMCX(1)/FKLX(1)
+        YMNX(2) = ZMCX(2)/FKLX(2)
+        YMNX(3) = ZMCX(3)/FKLX(3)
+        SYMNX = YMNX(1)+YMNX(2)+YMNX(3)
+        YMNX(1) = YMNX(1)/SYMNX
+        YMNX(2) = YMNX(2)/SYMNX
+        YMNX(3) = YMNX(3)/SYMNX
+        YMNAX = YMNX(1)
+        YMNOX = YMNX(2)
+        YMNNX = YMNX(3)
+!
+!---    Peng-Robinson gas mixture coefficients  ---
+!
+        CALL PRC_X( AGX,AIX,BGX,YMGX )
+!
+!---    Peng-Robinson gas compressibility ---
+!
+        INDX = 1
+        CALL PRC_Z( AGX,BGX,CAGX,CBGX,PVX,TKX,ZGX,INDX )
+!
+!---    Peng-Robinson gas component fugacities ---
+!
+        CALL FUG( AGX,AIX,BGX,CAGX,CBGX,FUGX,FUGLX,YMGX,ZGX )
+!
+!---    Vapor pressures  ---
+!
+        YMGAX = YMGX(1)
+        YMGOX = YMGX(2)
+        YMGNX = YMGX(3)
+        PVAX = PVX*YMGAX
+        PVOX = PVX*YMGOX
+        PVNX = PVX*YMGNX
+!
+!---    Phase saturations  ---
+!
+        SGX = 1.D+0
+        SNX = 0.D+0
+!
+!---    Gas molar density, kmol/m^3 ---
+!
+        RHOMGCX = PVX/(ZGX*TKX*RCU)
+        RHOMGX = RHOMGCX + RHOMGWX
+!
+!---    Gas mole fractions ---
+!
+        XMGAX = YMGX(1)*RHOMGCX/RHOMGX
+        XMGOX = YMGX(2)*RHOMGCX/RHOMGX
+        XMGNX = YMGX(3)*RHOMGCX/RHOMGX
+        XMGWX = RHOMGWX/RHOMGX
+        WTMGX = XMGAX*WTMA + XMGOX*WTMO + XMGNX*WTMN + XMGWX*WTMW
+!
+!---    Gas mass fractions ---
+!
+        XGAX = XMGAX*WTMA/WTMGX
+        XGOX = XMGOX*WTMO/WTMGX
+        XGNX = XMGNX*WTMN/WTMGX
+        XGWX = XMGWX*WTMW/WTMGX
+!
+!---    Gas density, kg/m^3 ---
+!
+        RHOGX = RHOMGX*WTMGX
+!
+!---    Peng-Robinson nonaqueous-liquid mixture coefficients  ---
+!
+        CALL PRC_X( ANX,AIX,BNX,YMNX )
+!
+!---    Peng-Robinson nonaqueous-liquid compressibility ---
+!
+        INDX = 2
+        CALL PRC_Z( ANX,BNX,CANX,CBNX,PPELX,TKX,ZNX,INDX )
+!
+!---    Nonaqueous-liquid molar density ---
+!
+        RHOMNCX = PPELX/(ZNX*TKX*RCU)
+        RHOMNX = RHOMNCX + RHOMGWX
+!
+!---    Nonaqueous-liquid mole fractions ---
+!
+        XMNAX = YMNX(1)*RHOMNCX/RHOMNX
+        XMNOX = YMNX(2)*RHOMNCX/RHOMNX
+        XMNNX = YMNX(3)*RHOMNCX/RHOMNX
+        XMNWX = RHOMGWX/RHOMNX
+        WTMNX = XMNAX*WTMA + XMNOX*WTMO + XMNNX*WTMN + XMNWX*WTMW
+!
+!---    Nonaqueous-liquid mass fractions ---
+!
+        XNAX = XMNAX*WTMA/WTMNX
+        XNOX = XMNOX*WTMO/WTMNX
+        XNNX = XMNNX*WTMN/WTMNX
+        XNWX = XMNWX*WTMW/WTMNX
+!
+!---    Nonaqueous-liquid density, kg/m^3 ---
+!
+        RHONX = RHOMNX*WTMNX
+      ENDIF
+!
+!---  Reset subroutine string sequence  ---
+!
+      ISUB_LOG = ISUB_LOG-1
+!
+!---  End of FLH_SR1 group  ---
+!
+      RETURN
+      END
+
